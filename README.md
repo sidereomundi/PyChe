@@ -14,6 +14,13 @@ Optional extras:
 pip install -e .[all]
 ```
 
+Useful subsets:
+
+```bash
+pip install -e .[mpi]
+pip install -e .[plots]
+```
+
 ## Quick Start
 
 ```python
@@ -21,7 +28,13 @@ from pyche import GCEModel
 
 m = GCEModel()
 result = m.MinGCE(
-    200, 2000.0, 54.0, 0.2, 0.0, 7000, 1000000,
+    endoftime=200,
+    sigmat=2000.0,
+    sigmah=54.0,
+    psfr=0.2,
+    pwind=0.0,
+    delay=7000,
+    time_wind=1000000,
     use_mpi=False,
     show_progress=False,
     backend="auto",
@@ -34,6 +47,38 @@ mod = result.mod
 fis = result.fis
 ```
 
+## Core Parameters
+
+`MinGCE` positional arguments map as:
+
+```python
+m.MinGCE(
+    endoftime,   # total simulated timesteps
+    sigmat,      # infall timescale width
+    sigmah,      # surface-density normalization
+    psfr,        # star-formation efficiency factor
+    pwind,       # wind/outflow efficiency factor
+    delay,       # infall profile delay/offset
+    time_wind,   # timestep after which wind can activate
+    ...
+)
+```
+
+Example:
+
+```python
+m.MinGCE(
+    endoftime=500,
+    sigmat=3000.0,
+    sigmah=50.0,
+    psfr=0.3,
+    pwind=0.0,
+    delay=10000,
+    time_wind=10000,
+    use_mpi=False,
+)
+```
+
 ## Outputs
 
 You can choose file output, in-memory return, or both:
@@ -41,6 +86,12 @@ You can choose file output, in-memory return, or both:
 - `write_output=True`, `return_results=False`: write files only.
 - `write_output=False`, `return_results=True`: return arrays only.
 - `write_output=True`, `return_results=True`: both.
+
+## Backend Notes
+
+- `backend="auto"` is recommended. It falls back safely to NumPy.
+- MPI requires `mpi4py` and launching with `mpiexec`.
+- `backend="cython"` is optional and speed-oriented, but it requires compiled Cython extensions to be available in your environment.
 
 ## Documentation
 
