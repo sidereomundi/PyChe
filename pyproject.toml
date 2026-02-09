@@ -1,0 +1,33 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "PyChe"
+version = "0.1.0"
+description = "Python chemical evolution model with packaged yield tables"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+  "numpy>=1.23",
+]
+
+[project.optional-dependencies]
+dataframe = ["pandas>=1.5"]
+plots = ["matplotlib>=3.6", "pandas>=1.5"]
+mpi = ["mpi4py>=3.1"]
+all = ["pandas>=1.5", "matplotlib>=3.6", "mpi4py>=3.1"]
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+include-package-data = true
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+pyche = [
+  "data/DATI/*.dat",
+  "data/DATI/*.csv",
+  "data/YIELDSBA/*.dat",
+]
