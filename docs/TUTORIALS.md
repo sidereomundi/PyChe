@@ -56,7 +56,7 @@ res = m.MinGCE(
 print(res.mod.shape, res.fis.shape)
 ```
 
-## 2) Compute diagnostics and quick plots from in-memory arrays
+## 2) Compute diagnostics and full diagnostic plots from in-memory arrays
 
 ```python
 from pyche import GCEModel
@@ -82,6 +82,7 @@ diag = diagnostics_from_tables(res.mod, res.fis)
 print(diag)
 
 fis_cols = {name: i for i, name in enumerate(res.fis_columns)}
+mod_cols = {name: i for i, name in enumerate(res.mod_columns)}
 t = res.fis[:, fis_cols["time"]]
 sfr = res.fis[:, fis_cols["sfr"]]
 zeta = res.fis[:, fis_cols["zeta"]]
@@ -92,6 +93,13 @@ ax[0].set_title("SFR vs Time")
 ax[1].plot(t, zeta)
 ax[1].set_title("Zeta vs Time")
 plt.tight_layout()
+
+# Additional diagnostics from in-memory arrays:
+# - mass budget evolution
+# - [Fe/H] vs time
+# - [O/Fe], [Mg/Fe] vs [Fe/H]
+# - MDF histogram
+# Full code is shown in examples/diagnostic_plots.ipynb.
 ```
 
 ## 3) Run with files and create diagnostic plots
@@ -159,17 +167,17 @@ pip install cython
 python setup.py build_ext --inplace
 ```
 
-## 5) MPI example (recommended with auto backend)
+## 5) MPI example with 4 ranks (recommended with auto backend)
 
 ```bash
-mpiexec -n 8 python -c "from pyche import GCEModel; m=GCEModel(); m.MinGCE(13700,3000.0,50.0,0.3,0.0,10000,10000,use_mpi=True,show_progress=False,backend='auto',output_dir='RISULTATI_MPI',output_mode='dataframe',df_binary_format='pickle')"
+mpiexec -n 4 python -c "from pyche import GCEModel; m=GCEModel(); m.MinGCE(13700,3000.0,50.0,0.3,0.0,10000,10000,use_mpi=True,show_progress=False,backend='auto',output_dir='RISULTATI_MPI4',output_mode='dataframe',df_binary_format='pickle')"
 ```
 
-## 6) MPI + Cython example
+## 6) MPI + Cython example with 4 ranks
 
 ```bash
 python setup.py build_ext --inplace
-mpiexec -n 8 python -c "from pyche import GCEModel; m=GCEModel(); m.MinGCE(13700,3000.0,50.0,0.3,0.0,10000,10000,use_mpi=True,show_progress=False,backend='cython',output_dir='RISULTATI_MPI_CYTHON',output_mode='dataframe',df_binary_format='pickle')"
+mpiexec -n 4 python -c "from pyche import GCEModel; m=GCEModel(); m.MinGCE(13700,3000.0,50.0,0.3,0.0,10000,10000,use_mpi=True,show_progress=False,backend='cython',output_dir='RISULTATI_MPI4_CYTHON',output_mode='dataframe',df_binary_format='pickle')"
 ```
 
 For repeat/median benchmarking workflows, see:
