@@ -107,3 +107,4 @@ You can choose file output, in-memory return, or both:
 - `docs/INSTALL.md`
 - `docs/TUTORIALS.md`
 - `examples/diagnostic_plots.ipynb`
+- `examples/mpi_cython_benchmark.ipynb`

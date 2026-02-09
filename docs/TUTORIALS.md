@@ -171,3 +171,7 @@ mpiexec -n 8 python -c "from pyche import GCEModel; m=GCEModel(); m.MinGCE(13700
 python setup.py build_ext --inplace
 mpiexec -n 8 python -c "from pyche import GCEModel; m=GCEModel(); m.MinGCE(13700,3000.0,50.0,0.3,0.0,10000,10000,use_mpi=True,show_progress=False,backend='cython',output_dir='RISULTATI_MPI_CYTHON',output_mode='dataframe',df_binary_format='pickle')"
 ```
+
+For repeat/median benchmarking workflows, see:
+
+- `examples/mpi_cython_benchmark.ipynb`
