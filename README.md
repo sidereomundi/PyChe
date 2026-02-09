@@ -21,6 +21,13 @@ pip install -e .[mpi]
 pip install -e .[plots]
 ```
 
+Optional Cython build (recommended for speed):
+
+```bash
+pip install cython
+python setup.py build_ext --inplace
+```
+
 ## Quick Start
 
 ```python
@@ -91,7 +98,9 @@ You can choose file output, in-memory return, or both:
 
 - `backend="auto"` is recommended. It falls back safely to NumPy.
 - MPI requires `mpi4py` and launching with `mpiexec`.
-- `backend="cython"` is optional and speed-oriented, but it requires compiled Cython extensions to be available in your environment.
+- `backend="cython"` is optional and speed-oriented, but it requires compiled Cython extensions:
+  - `pip install cython`
+  - `python setup.py build_ext --inplace`
 
 ## Documentation
 

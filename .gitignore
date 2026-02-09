@@ -2,9 +2,12 @@ __pycache__/
 *.pyc
 *.pyo
 *.pyd
+*.so
 .venv/
 build/
 dist/
 *.egg-info/
+src/pyche/_cyengine.c
+src/pyche/_cyinterp.c
 RISULTATI*/
 *.ipynb_checkpoints
