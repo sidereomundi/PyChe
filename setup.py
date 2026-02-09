@@ -1,7 +1,11 @@
+from __future__ import annotations
+
+import sys
+
 from setuptools import Extension, setup
 
 
-def build_extensions():
+def _build_extensions():
     import numpy as np
 
     try:
@@ -16,4 +20,9 @@ def build_extensions():
     return cythonize(ext_modules, compiler_directives={"language_level": "3"})
 
 
-setup(ext_modules=build_extensions())
+# Keep regular pip installs lightweight (no build-time numpy/cython needed).
+# Compile extensions only when the user explicitly asks for build_ext.
+if "build_ext" in sys.argv:
+    setup(ext_modules=_build_extensions())
+else:
+    setup()
