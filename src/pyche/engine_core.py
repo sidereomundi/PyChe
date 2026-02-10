@@ -101,6 +101,9 @@ def run_mingce_loop(
     local_bins_arr = np.asarray(list(local_bins), dtype=np.int32)
     interp = model.interpolator.interp
     interp_many_step = getattr(model.interpolator, "interp_many_step", None)
+    use_sfr_input = cfg.sfr_time is not None and cfg.sfr_values is not None
+    sfr_time = np.asarray(cfg.sfr_time, dtype=float) if use_sfr_input else None
+    sfr_values = np.asarray(cfg.sfr_values, dtype=float) if use_sfr_input else None
     next_dt = 1
     use_cyengine = bool(cfg.backend in {"cython", "auto"} and _cyengine is not None)
     use_spalla_lut = bool(use_cyengine and cfg.spalla_lut)
@@ -174,21 +177,32 @@ def run_mingce_loop(
             - wind[t : cfg.endoftime + 1]
         )
 
-        if gas[t] / superf > threshold and cfg.sigmah != 0.0:
-            sfr = (
-                cfg.psfr
-                * (gas[t] / (superf * cfg.sigmah)) ** kappa
-                * (cfg.sigmah / sigmasun) ** (kappa - 1.0)
-                * (8.0 / rm)
-                * (superf / 1000.0)
-                * cfg.sigmah
-            )
+        if use_sfr_input:
+            assert sfr_time is not None
+            assert sfr_values is not None
+            step_times = np.arange(t_prev + 1, t + 1, dtype=float)
+            sfr_step = np.interp(step_times, sfr_time, sfr_values)
+            sfr = float(sfr_step[-1])
+            sfr_mass = float(np.sum(sfr_step))
+            sfr_hist[t] = sfr
+            if dt_scale > 1:
+                sfr_hist[t_prev + 1 : t] = sfr_step[:-1]
         else:
-            sfr = 0.0
-        sfr_hist[t] = sfr
-        if dt_scale > 1:
-            sfr_hist[t_prev + 1 : t] = sfr
-        sfr_mass = sfr * float(dt_scale)
+            if gas[t] / superf > threshold and cfg.sigmah != 0.0:
+                sfr = (
+                    cfg.psfr
+                    * (gas[t] / (superf * cfg.sigmah)) ** kappa
+                    * (cfg.sigmah / sigmasun) ** (kappa - 1.0)
+                    * (8.0 / rm)
+                    * (superf / 1000.0)
+                    * cfg.sigmah
+                )
+            else:
+                sfr = 0.0
+            sfr_hist[t] = sfr
+            if dt_scale > 1:
+                sfr_hist[t_prev + 1 : t] = sfr
+            sfr_mass = sfr * float(dt_scale)
 
         if gas[t] / superf >= threshold:
             interp_t0 = perf_counter()

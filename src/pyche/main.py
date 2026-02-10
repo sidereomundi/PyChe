@@ -188,6 +188,8 @@ class GCEModel:
         pwind: float,
         delay: int,
         time_wind: int,
+        sfr_time: np.ndarray | list[float] | tuple[float, ...] | None = None,
+        sfr_values: np.ndarray | list[float] | tuple[float, ...] | None = None,
         use_mpi: bool = True,
         mpi_nonblocking_reduce: bool = False,
         show_progress: bool = True,
@@ -232,16 +234,42 @@ class GCEModel:
         mpi_subprocess: bool = False,
         mpi_subprocess_ranks: int = 0,
     ) -> GCEResult | None:
+        if (sfr_time is None) != (sfr_values is None):
+            raise ValueError("sfr_time and sfr_values must be provided together")
+        sfr_time_arr: np.ndarray | None = None
+        sfr_values_arr: np.ndarray | None = None
+        endoftime_eff = int(endoftime)
+        if sfr_time is not None and sfr_values is not None:
+            sfr_time_arr = np.asarray(sfr_time, dtype=float).reshape(-1)
+            sfr_values_arr = np.asarray(sfr_values, dtype=float).reshape(-1)
+            if sfr_time_arr.size != sfr_values_arr.size:
+                raise ValueError("sfr_time and sfr_values must have the same length")
+            if sfr_time_arr.size < 2:
+                raise ValueError("sfr_time/sfr_values must contain at least 2 points")
+            if not np.all(np.diff(sfr_time_arr) > 0.0):
+                raise ValueError("sfr_time must be strictly increasing")
+            if not np.all(np.isfinite(sfr_time_arr)):
+                raise ValueError("sfr_time must be finite")
+            if not np.all(np.isfinite(sfr_values_arr)):
+                raise ValueError("sfr_values must be finite")
+            if np.any(sfr_values_arr < 0.0):
+                raise ValueError("sfr_values must be >= 0")
+            endoftime_eff = int(np.ceil(float(sfr_time_arr[-1])))
+            if endoftime_eff < 1:
+                raise ValueError("sfr_time[-1] must be > 0")
+
         comm0, rank0, size0 = self._mpi_ctx()
         if mpi_subprocess and use_mpi and size0 == 1:
             call_kwargs: dict[str, object] = {
-                "endoftime": endoftime,
+                "endoftime": endoftime_eff,
                 "sigmat": sigmat,
                 "sigmah": sigmah,
                 "psfr": psfr,
                 "pwind": pwind,
                 "delay": delay,
                 "time_wind": time_wind,
+                "sfr_time": None if sfr_time_arr is None else [float(x) for x in sfr_time_arr],
+                "sfr_values": None if sfr_values_arr is None else [float(x) for x in sfr_values_arr],
                 "use_mpi": True,
                 "mpi_nonblocking_reduce": mpi_nonblocking_reduce,
                 "show_progress": show_progress,
@@ -289,13 +317,15 @@ class GCEModel:
             return self._run_mpi_subprocess(mpi_subprocess_ranks=mpi_subprocess_ranks, kwargs=call_kwargs)
 
         cfg = RunConfig(
-            endoftime=endoftime,
+            endoftime=endoftime_eff,
             sigmat=sigmat,
             sigmah=sigmah,
             psfr=psfr,
             pwind=pwind,
             delay=delay,
             time_wind=time_wind,
+            sfr_time=None if sfr_time_arr is None else tuple(float(x) for x in sfr_time_arr),
+            sfr_values=None if sfr_values_arr is None else tuple(float(x) for x in sfr_values_arr),
             use_mpi=use_mpi,
             mpi_nonblocking_reduce=mpi_nonblocking_reduce,
             show_progress=show_progress,

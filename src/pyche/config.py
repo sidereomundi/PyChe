@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 
 @dataclass(frozen=True)
 class RunConfig:
@@ -15,6 +16,8 @@ class RunConfig:
     pwind: float
     delay: int
     time_wind: int
+    sfr_time: tuple[float, ...] | None = None
+    sfr_values: tuple[float, ...] | None = None
     use_mpi: bool = True
     mpi_nonblocking_reduce: bool = False
     show_progress: bool = True
@@ -61,6 +64,29 @@ class RunConfig:
             raise ValueError("endoftime must be >= 0")
         if self.sigmat < 0.0:
             raise ValueError("sigmat must be >= 0")
+        if (self.sfr_time is None) != (self.sfr_values is None):
+            raise ValueError("sfr_time and sfr_values must be provided together")
+        if self.sfr_time is not None and self.sfr_values is not None:
+            if len(self.sfr_time) != len(self.sfr_values):
+                raise ValueError("sfr_time and sfr_values must have the same length")
+            if len(self.sfr_time) < 2:
+                raise ValueError("sfr_time/sfr_values must contain at least 2 points")
+            prev_t = float(self.sfr_time[0])
+            if not math.isfinite(prev_t):
+                raise ValueError("sfr_time values must be finite")
+            for i in range(1, len(self.sfr_time)):
+                t = float(self.sfr_time[i])
+                if not math.isfinite(t):
+                    raise ValueError("sfr_time values must be finite")
+                if t <= prev_t:
+                    raise ValueError("sfr_time must be strictly increasing")
+                prev_t = t
+            for v in self.sfr_values:
+                vf = float(v)
+                if not math.isfinite(vf):
+                    raise ValueError("sfr_values must be finite")
+                if vf < 0.0:
+                    raise ValueError("sfr_values must be >= 0")
         if self.output_dir is not None and str(self.output_dir).strip() == "":
             raise ValueError("output_dir cannot be empty")
         if self.progress_style not in {"auto", "single", "line", "compact", "off"}:
