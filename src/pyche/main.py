@@ -74,13 +74,22 @@ class GCEModel:
             msg = proc.stderr.strip() or proc.stdout.strip() or f"mpiexec failed with code {proc.returncode}"
             raise RuntimeError(msg)
         marker = "PYCHE_RESULT_BASE64:"
-        result_line = None
-        for line in proc.stdout.splitlines():
-            if line.startswith(marker):
-                result_line = line
-        if result_line is None:
-            raise RuntimeError("MPI subprocess did not return a result payload")
-        blob = result_line[len(marker) :].strip()
+        idx = proc.stdout.find(marker)
+        if idx < 0:
+            out_tail = proc.stdout[-1000:].strip()
+            err_tail = proc.stderr[-1000:].strip()
+            debug = out_tail or err_tail or "no stdout/stderr output"
+            raise RuntimeError(f"MPI subprocess did not return a result payload. Tail output:\n{debug}")
+        rest = proc.stdout[idx + len(marker) :]
+        blob_chars = []
+        for ch in rest:
+            if ch.isalnum() or ch in "+/=":
+                blob_chars.append(ch)
+            else:
+                break
+        blob = "".join(blob_chars).strip()
+        if not blob:
+            raise RuntimeError("MPI subprocess returned an empty result payload")
         obj = pickle.loads(base64.b64decode(blob.encode("ascii")))
         if not isinstance(obj, MinGCEResult):
             raise RuntimeError("MPI subprocess returned invalid result payload")
