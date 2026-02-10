@@ -188,8 +188,10 @@ class GCEModel:
         pwind: float,
         delay: int,
         time_wind: int,
+        input_time: np.ndarray | list[float] | tuple[float, ...] | None = None,
         infall_time: np.ndarray | list[float] | tuple[float, ...] | None = None,
         infall_values: np.ndarray | list[float] | tuple[float, ...] | None = None,
+        rhosfr_values: np.ndarray | list[float] | tuple[float, ...] | None = None,
         use_mpi: bool = True,
         mpi_nonblocking_reduce: bool = False,
         show_progress: bool = True,
@@ -234,29 +236,48 @@ class GCEModel:
         mpi_subprocess: bool = False,
         mpi_subprocess_ranks: int = 0,
     ) -> GCEResult | None:
-        if (infall_time is None) != (infall_values is None):
-            raise ValueError("infall_time and infall_values must be provided together")
-        infall_time_arr: np.ndarray | None = None
+        if input_time is not None and infall_time is not None:
+            raise ValueError("Provide only one of input_time or infall_time")
+        raw_input_time = input_time if input_time is not None else infall_time
+        input_time_arr: np.ndarray | None = None
         infall_values_arr: np.ndarray | None = None
+        rhosfr_values_arr: np.ndarray | None = None
         endoftime_eff = int(endoftime)
-        if infall_time is not None and infall_values is not None:
-            infall_time_arr = np.asarray(infall_time, dtype=float).reshape(-1)
+        if raw_input_time is None and (infall_values is not None or rhosfr_values is not None):
+            raise ValueError("input_time (or legacy infall_time) is required when infall_values or rhosfr_values are provided")
+        if raw_input_time is not None:
+            input_time_arr = np.asarray(raw_input_time, dtype=float).reshape(-1)
+            if input_time_arr.size < 2:
+                raise ValueError("input_time must contain at least 2 points")
+            if not np.all(np.diff(input_time_arr) > 0.0):
+                raise ValueError("input_time must be strictly increasing")
+            if not np.all(np.isfinite(input_time_arr)):
+                raise ValueError("input_time must be finite")
+            endoftime_eff = int(np.ceil(float(input_time_arr[-1])))
+            if endoftime_eff < 1:
+                raise ValueError("input_time[-1] must be > 0")
+            if infall_values is None and rhosfr_values is None:
+                raise ValueError("input_time requires at least one of infall_values or rhosfr_values")
+        if infall_values is not None:
             infall_values_arr = np.asarray(infall_values, dtype=float).reshape(-1)
-            if infall_time_arr.size != infall_values_arr.size:
-                raise ValueError("infall_time and infall_values must have the same length")
-            if infall_time_arr.size < 2:
-                raise ValueError("infall_time/infall_values must contain at least 2 points")
-            if not np.all(np.diff(infall_time_arr) > 0.0):
-                raise ValueError("infall_time must be strictly increasing")
-            if not np.all(np.isfinite(infall_time_arr)):
-                raise ValueError("infall_time must be finite")
+            if input_time_arr is None:
+                raise ValueError("input_time is required with infall_values")
+            if input_time_arr.size != infall_values_arr.size:
+                raise ValueError("input_time and infall_values must have the same length")
             if not np.all(np.isfinite(infall_values_arr)):
                 raise ValueError("infall_values must be finite")
             if np.any(infall_values_arr < 0.0):
                 raise ValueError("infall_values must be >= 0")
-            endoftime_eff = int(np.ceil(float(infall_time_arr[-1])))
-            if endoftime_eff < 1:
-                raise ValueError("infall_time[-1] must be > 0")
+        if rhosfr_values is not None:
+            rhosfr_values_arr = np.asarray(rhosfr_values, dtype=float).reshape(-1)
+            if input_time_arr is None:
+                raise ValueError("input_time is required with rhosfr_values")
+            if input_time_arr.size != rhosfr_values_arr.size:
+                raise ValueError("input_time and rhosfr_values must have the same length")
+            if not np.all(np.isfinite(rhosfr_values_arr)):
+                raise ValueError("rhosfr_values must be finite")
+            if np.any(rhosfr_values_arr < 0.0):
+                raise ValueError("rhosfr_values must be >= 0")
 
         comm0, rank0, size0 = self._mpi_ctx()
         if mpi_subprocess and use_mpi and size0 == 1:
@@ -268,8 +289,9 @@ class GCEModel:
                 "pwind": pwind,
                 "delay": delay,
                 "time_wind": time_wind,
-                "infall_time": None if infall_time_arr is None else [float(x) for x in infall_time_arr],
+                "input_time": None if input_time_arr is None else [float(x) for x in input_time_arr],
                 "infall_values": None if infall_values_arr is None else [float(x) for x in infall_values_arr],
+                "rhosfr_values": None if rhosfr_values_arr is None else [float(x) for x in rhosfr_values_arr],
                 "use_mpi": True,
                 "mpi_nonblocking_reduce": mpi_nonblocking_reduce,
                 "show_progress": show_progress,
@@ -324,8 +346,10 @@ class GCEModel:
             pwind=pwind,
             delay=delay,
             time_wind=time_wind,
-            infall_time=None if infall_time_arr is None else tuple(float(x) for x in infall_time_arr),
+            input_time=None if input_time_arr is None else tuple(float(x) for x in input_time_arr),
+            infall_time=None,
             infall_values=None if infall_values_arr is None else tuple(float(x) for x in infall_values_arr),
+            rhosfr_values=None if rhosfr_values_arr is None else tuple(float(x) for x in rhosfr_values_arr),
             use_mpi=use_mpi,
             mpi_nonblocking_reduce=mpi_nonblocking_reduce,
             show_progress=show_progress,

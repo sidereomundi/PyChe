@@ -16,8 +16,10 @@ class RunConfig:
     pwind: float
     delay: int
     time_wind: int
+    input_time: tuple[float, ...] | None = None
     infall_time: tuple[float, ...] | None = None
     infall_values: tuple[float, ...] | None = None
+    rhosfr_values: tuple[float, ...] | None = None
     use_mpi: bool = True
     mpi_nonblocking_reduce: bool = False
     show_progress: bool = True
@@ -64,29 +66,48 @@ class RunConfig:
             raise ValueError("endoftime must be >= 0")
         if self.sigmat < 0.0:
             raise ValueError("sigmat must be >= 0")
-        if (self.infall_time is None) != (self.infall_values is None):
-            raise ValueError("infall_time and infall_values must be provided together")
-        if self.infall_time is not None and self.infall_values is not None:
-            if len(self.infall_time) != len(self.infall_values):
-                raise ValueError("infall_time and infall_values must have the same length")
-            if len(self.infall_time) < 2:
-                raise ValueError("infall_time/infall_values must contain at least 2 points")
-            prev_t = float(self.infall_time[0])
+        if self.input_time is not None and self.infall_time is not None:
+            raise ValueError("Provide only one of input_time or infall_time")
+        timeline = self.input_time if self.input_time is not None else self.infall_time
+        has_infall = self.infall_values is not None
+        has_rhosfr = self.rhosfr_values is not None
+        if timeline is None and (has_infall or has_rhosfr):
+            raise ValueError("input_time (or legacy infall_time) is required when infall_values or rhosfr_values are provided")
+        if timeline is not None and not (has_infall or has_rhosfr):
+            raise ValueError("input_time requires at least one of infall_values or rhosfr_values")
+        if timeline is not None:
+            if len(timeline) < 2:
+                raise ValueError("input_time must contain at least 2 points")
+            prev_t = float(timeline[0])
             if not math.isfinite(prev_t):
-                raise ValueError("infall_time values must be finite")
-            for i in range(1, len(self.infall_time)):
-                t = float(self.infall_time[i])
+                raise ValueError("input_time values must be finite")
+            for i in range(1, len(timeline)):
+                t = float(timeline[i])
                 if not math.isfinite(t):
-                    raise ValueError("infall_time values must be finite")
+                    raise ValueError("input_time values must be finite")
                 if t <= prev_t:
-                    raise ValueError("infall_time must be strictly increasing")
+                    raise ValueError("input_time must be strictly increasing")
                 prev_t = t
+        if timeline is not None and has_infall:
+            assert self.infall_values is not None
+            if len(timeline) != len(self.infall_values):
+                raise ValueError("input_time and infall_values must have the same length")
             for v in self.infall_values:
                 vf = float(v)
                 if not math.isfinite(vf):
                     raise ValueError("infall_values must be finite")
                 if vf < 0.0:
                     raise ValueError("infall_values must be >= 0")
+        if timeline is not None and has_rhosfr:
+            assert self.rhosfr_values is not None
+            if len(timeline) != len(self.rhosfr_values):
+                raise ValueError("input_time and rhosfr_values must have the same length")
+            for v in self.rhosfr_values:
+                vf = float(v)
+                if not math.isfinite(vf):
+                    raise ValueError("rhosfr_values must be finite")
+                if vf < 0.0:
+                    raise ValueError("rhosfr_values must be >= 0")
         if self.output_dir is not None and str(self.output_dir).strip() == "":
             raise ValueError("output_dir cannot be empty")
         if self.progress_style not in {"auto", "single", "line", "compact", "off"}:

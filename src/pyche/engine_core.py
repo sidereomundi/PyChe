@@ -82,11 +82,25 @@ def run_mingce_loop(
     rel_ema_init = False
     stable_steps = 0
 
+    input_time_arr: np.ndarray | None = None
+    if cfg.input_time is not None:
+        input_time_arr = np.asarray(cfg.input_time, dtype=float)
+    elif cfg.infall_time is not None:
+        input_time_arr = np.asarray(cfg.infall_time, dtype=float)
+
+    infall_values_arr: np.ndarray | None = None
+    if cfg.infall_values is not None:
+        infall_values_arr = np.asarray(cfg.infall_values, dtype=float)
+
+    rhosfr_values_arr: np.ndarray | None = None
+    if cfg.rhosfr_values is not None:
+        rhosfr_values_arr = np.asarray(cfg.rhosfr_values, dtype=float)
+
     # Static infall profile: either parameterized (original model) or user-provided infall(t).
     if cfg.endoftime > 0:
         tt = np.arange(1, cfg.endoftime + 1, dtype=float)
-        if cfg.infall_time is not None and cfg.infall_values is not None:
-            infall = np.interp(tt, np.asarray(cfg.infall_time, dtype=float), np.asarray(cfg.infall_values, dtype=float))
+        if input_time_arr is not None and infall_values_arr is not None:
+            infall = np.interp(tt, input_time_arr, infall_values_arr)
             allv[1 : cfg.endoftime + 1] = np.cumsum(infall, dtype=float)
         elif cfg.sigmat != 0.0:
             coeff = cfg.sigmah * superf / (2.5 * cfg.sigmat)
@@ -177,9 +191,12 @@ def run_mingce_loop(
             - wind[t : cfg.endoftime + 1]
         )
 
+        psfr_eff = cfg.psfr
+        if input_time_arr is not None and rhosfr_values_arr is not None:
+            psfr_eff = float(np.interp(float(t), input_time_arr, rhosfr_values_arr))
         if gas[t] / superf > threshold and cfg.sigmah != 0.0:
             sfr = (
-                cfg.psfr
+                psfr_eff
                 * (gas[t] / (superf * cfg.sigmah)) ** kappa
                 * (cfg.sigmah / sigmasun) ** (kappa - 1.0)
                 * (8.0 / rm)
