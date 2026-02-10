@@ -108,6 +108,11 @@ Cache-stride validation helper (one command):
 python -m pyche.cache_validation --stride-test 4 --endoftime 2000
 ```
 
+For safer `interp_cache_guard_stride>1`, two adaptive guard triggers are available:
+
+- `interp_cache_guard_force_below_zeta` (default `0.005`): always guard below this metallicity.
+- `interp_cache_guard_zeta_trigger` (default `2e-4`): force guard if `zeta` changes quickly.
+
 ## Documentation
 
 - `docs/INSTALL.md`

@@ -49,6 +49,8 @@ class RunConfig:
     interp_cache_guard_tol: float = 0.05
     interp_cache_guard_stride: int = 16
     interp_cache_guard_samples: int = 5
+    interp_cache_guard_force_below_zeta: float = 0.005
+    interp_cache_guard_zeta_trigger: float = 2.0e-4
     profile_timing: bool = True
 
     def __post_init__(self) -> None:
@@ -102,3 +104,7 @@ class RunConfig:
             raise ValueError("interp_cache_guard_stride must be >= 1")
         if self.interp_cache_guard_samples < 1:
             raise ValueError("interp_cache_guard_samples must be >= 1")
+        if self.interp_cache_guard_force_below_zeta < 0.0:
+            raise ValueError("interp_cache_guard_force_below_zeta must be >= 0")
+        if self.interp_cache_guard_zeta_trigger < 0.0:
+            raise ValueError("interp_cache_guard_zeta_trigger must be >= 0")

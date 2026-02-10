@@ -42,6 +42,8 @@ class CythonModelInterpolator:
     cache_guard_tol: float = 0.05
     cache_guard_stride: int = 32
     cache_guard_samples: int = 5
+    cache_guard_force_below_zeta: float = 0.005
+    cache_guard_zeta_trigger: float = 2.0e-4
 
     def __post_init__(self) -> None:
         self._compat = CythonCompatInterpolator(self.tables)
@@ -99,6 +101,7 @@ class CythonModelInterpolator:
         )
         self._qia_sum = float(np.sum(self._qia_vec[:31], dtype=np.float64))
         self._guard_calls = 0
+        self._last_guard_zeta = None
         if self.enable_lookup_cache and _cyinterp is not None:
             self._build_lookup_cache()
 
@@ -220,15 +223,24 @@ class CythonModelInterpolator:
             if not self.enable_cache_guard:
                 return True
             self._guard_calls += 1
-            if (self._guard_calls % max(1, int(self.cache_guard_stride))) != 0:
+            force_guard = False
+            zt = float(zeta_t)
+            if zt <= float(self.cache_guard_force_below_zeta):
+                force_guard = True
+            elif self._last_guard_zeta is not None:
+                if abs(zt - float(self._last_guard_zeta)) >= float(self.cache_guard_zeta_trigger):
+                    force_guard = True
+            else:
+                force_guard = True
+            if (not force_guard) and ((self._guard_calls % max(1, int(self.cache_guard_stride))) != 0):
                 return True
             idxs = np.asarray(indices, dtype=np.int32)
             if idxs.size == 0:
+                self._last_guard_zeta = zt
                 return True
             n_samples = max(1, int(self.cache_guard_samples))
             pos = np.linspace(0, idxs.size - 1, num=min(n_samples, idxs.size), dtype=np.int32)
             sample_bins = idxs[np.unique(pos)]
-            zt = float(zeta_t)
             tol = float(self.cache_guard_tol)
             key_tol = min(tol, 0.02)
             # O16, Mg, Fe in q/qqn indexing
@@ -268,6 +280,7 @@ class CythonModelInterpolator:
                 rel_h = abs(h_cached - float(h_exact)) / max(abs(float(h_exact)), 1.0e-20)
                 if (rel_q > tol) or (rel_key > key_tol) or (rel_h > tol):
                     return False
+            self._last_guard_zeta = zt
             return True
 
         if _cyinterp is None:
@@ -390,4 +403,6 @@ def build_cython_backend(tables: ModelTables, cfg: RunConfig | None = None):
         cache_guard_tol=float(cfg.interp_cache_guard_tol),
         cache_guard_stride=int(cfg.interp_cache_guard_stride),
         cache_guard_samples=int(cfg.interp_cache_guard_samples),
+        cache_guard_force_below_zeta=float(cfg.interp_cache_guard_force_below_zeta),
+        cache_guard_zeta_trigger=float(cfg.interp_cache_guard_zeta_trigger),
     )

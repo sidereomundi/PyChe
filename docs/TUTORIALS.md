@@ -191,3 +191,10 @@ python -m pyche.cache_validation --stride-test 4 --endoftime 2000
 ```
 
 This prints JSON metrics (max/p95/mean absolute differences for `[O/Fe]` and `[Fe/H]`).
+
+If you want to use `interp_cache_guard_stride>1` more safely, keep:
+
+- `interp_cache_guard_force_below_zeta=0.005`
+- `interp_cache_guard_zeta_trigger=2e-4`
+
+These force guard checks in low-metallicity and fast-changing metallicity regimes.

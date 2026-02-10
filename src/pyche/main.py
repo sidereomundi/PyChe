@@ -94,6 +94,8 @@ class GCEModel:
         interp_cache_guard_tol: float = 0.05,
         interp_cache_guard_stride: int = 16,
         interp_cache_guard_samples: int = 5,
+        interp_cache_guard_force_below_zeta: float = 0.005,
+        interp_cache_guard_zeta_trigger: float = 2.0e-4,
         profile_timing: bool = True,
         return_results: bool = False,
     ) -> MinGCEResult | None:
@@ -139,6 +141,8 @@ class GCEModel:
             interp_cache_guard_tol=interp_cache_guard_tol,
             interp_cache_guard_stride=interp_cache_guard_stride,
             interp_cache_guard_samples=interp_cache_guard_samples,
+            interp_cache_guard_force_below_zeta=interp_cache_guard_force_below_zeta,
+            interp_cache_guard_zeta_trigger=interp_cache_guard_zeta_trigger,
             profile_timing=profile_timing,
         )
 
