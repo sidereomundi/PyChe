@@ -67,8 +67,14 @@ def run_mingce_loop(
     t = 0
     last_progress_step = 0
     progress_stride = max(1, cfg.endoftime // 200) if cfg.endoftime > 0 else 1
-    progress_use_carriage = bool(getattr(sys.stdout, "isatty", lambda: False)())
+    style = str(getattr(cfg, "progress_style", "single")).strip().lower()
+    if style not in {"auto", "single", "line", "compact", "off"}:
+        style = "auto"
+    if style == "auto":
+        style = "single" if bool(getattr(sys.stdout, "isatty", lambda: False)()) else "line"
+    progress_use_carriage = style == "single"
     progress_path = os.getenv("PYCHE_PROGRESS_PATH", "").strip() if rank == 0 else ""
+    last_progress_bucket = -1
     gas_floor = 1.0e-20
     stage_sec = {"interp": 0.0, "mpi_reduce": 0.0, "death": 0.0, "wind": 0.0, "output": 0.0}
     total_t0 = perf_counter()
@@ -121,6 +127,7 @@ def run_mingce_loop(
         mpi_q_view = mpi_reduce_buf[qi_slice].reshape(qispecial.shape)
 
     def _print_progress(step: int) -> None:
+        nonlocal last_progress_bucket
         if progress_path:
             try:
                 with open(progress_path, "w", encoding="utf-8") as f:
@@ -129,7 +136,14 @@ def run_mingce_loop(
                 pass
         if not (cfg.show_progress and rank == 0 and cfg.endoftime > 0):
             return
+        if style == "off":
+            return
         pct = 100.0 * step / cfg.endoftime
+        if style == "compact":
+            bucket = int(pct) // 5
+            if bucket == last_progress_bucket and step < cfg.endoftime:
+                return
+            last_progress_bucket = bucket
         bar_w = 30
         fill = int(bar_w * step / cfg.endoftime)
         bar = "#" * fill + "-" * (bar_w - fill)
@@ -435,7 +449,8 @@ def run_mingce_loop(
 
     if rank == 0:
         if cfg.show_progress and cfg.endoftime > 0:
-            _print_progress(cfg.endoftime)
+            if last_progress_step < cfg.endoftime:
+                _print_progress(cfg.endoftime)
             if progress_use_carriage:
                 sys.stdout.write("\n")
                 sys.stdout.flush()

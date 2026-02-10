@@ -63,7 +63,7 @@ class GCEModel:
             raise ValueError("mpi_subprocess_ranks must be >= 2")
         payload = base64.b64encode(json.dumps(kwargs).encode("utf-8")).decode("ascii")
         show_progress = bool(kwargs.get("show_progress", False))
-        progress_style = str(kwargs.get("progress_style", "auto")).strip().lower()
+        progress_style = str(kwargs.get("progress_style", "single")).strip().lower()
         endoftime = int(kwargs.get("endoftime", 0))
         if show_progress:
             kwargs = dict(kwargs)
@@ -191,7 +191,7 @@ class GCEModel:
         use_mpi: bool = True,
         mpi_nonblocking_reduce: bool = False,
         show_progress: bool = True,
-        progress_style: str = "auto",
+        progress_style: str = "single",
         output_dir: str | None = None,
         output_mode: str = "dataframe",
         write_output: bool = True,
@@ -299,6 +299,7 @@ class GCEModel:
             use_mpi=use_mpi,
             mpi_nonblocking_reduce=mpi_nonblocking_reduce,
             show_progress=show_progress,
+            progress_style=progress_style,
             output_dir=output_dir,
             output_mode=output_mode,
             write_output=write_output,

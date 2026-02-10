@@ -18,6 +18,7 @@ class RunConfig:
     use_mpi: bool = True
     mpi_nonblocking_reduce: bool = False
     show_progress: bool = True
+    progress_style: str = "single"
     output_dir: str | None = None
     output_mode: str = "dataframe"
     write_output: bool = True
@@ -62,6 +63,8 @@ class RunConfig:
             raise ValueError("sigmat must be >= 0")
         if self.output_dir is not None and str(self.output_dir).strip() == "":
             raise ValueError("output_dir cannot be empty")
+        if self.progress_style not in {"auto", "single", "line", "compact", "off"}:
+            raise ValueError("progress_style must be one of: auto, single, line, compact, off")
         if self.output_mode not in {"legacy", "dataframe", "both"}:
             raise ValueError("output_mode must be one of: legacy, dataframe, both")
         if self.df_binary_format not in {"pickle", "parquet"}:
