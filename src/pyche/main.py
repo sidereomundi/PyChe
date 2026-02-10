@@ -3,6 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import base64
+import json
+import pickle
+import subprocess
+import sys
 import time
 import numpy as np
 
@@ -50,6 +55,36 @@ class GCEModel:
             return None, 0, 1
         comm = MPI.COMM_WORLD
         return comm, int(comm.Get_rank()), int(comm.Get_size())
+
+    def _run_mpi_subprocess(self, mpi_subprocess_ranks: int, kwargs: dict[str, object]) -> MinGCEResult:
+        if mpi_subprocess_ranks < 2:
+            raise ValueError("mpi_subprocess_ranks must be >= 2")
+        payload = base64.b64encode(json.dumps(kwargs).encode("utf-8")).decode("ascii")
+        cmd = [
+            "mpiexec",
+            "-n",
+            str(int(mpi_subprocess_ranks)),
+            sys.executable,
+            "-m",
+            "pyche._mpiexec_bridge",
+            payload,
+        ]
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        if proc.returncode != 0:
+            msg = proc.stderr.strip() or proc.stdout.strip() or f"mpiexec failed with code {proc.returncode}"
+            raise RuntimeError(msg)
+        marker = "PYCHE_RESULT_BASE64:"
+        result_line = None
+        for line in proc.stdout.splitlines():
+            if line.startswith(marker):
+                result_line = line
+        if result_line is None:
+            raise RuntimeError("MPI subprocess did not return a result payload")
+        blob = result_line[len(marker) :].strip()
+        obj = pickle.loads(base64.b64decode(blob.encode("ascii")))
+        if not isinstance(obj, MinGCEResult):
+            raise RuntimeError("MPI subprocess returned invalid result payload")
+        return obj
 
     def MinGCE(
         self,
@@ -100,7 +135,64 @@ class GCEModel:
         interp_cache_guard_zeta_trigger: float = 2.0e-4,
         profile_timing: bool = True,
         return_results: bool = False,
+        mpi_subprocess: bool = False,
+        mpi_subprocess_ranks: int = 0,
     ) -> MinGCEResult | None:
+        comm0, rank0, size0 = self._mpi_ctx()
+        if mpi_subprocess and use_mpi and size0 == 1:
+            call_kwargs: dict[str, object] = {
+                "endoftime": endoftime,
+                "sigmat": sigmat,
+                "sigmah": sigmah,
+                "psfr": psfr,
+                "pwind": pwind,
+                "delay": delay,
+                "time_wind": time_wind,
+                "use_mpi": True,
+                "mpi_nonblocking_reduce": mpi_nonblocking_reduce,
+                "show_progress": show_progress,
+                "output_dir": output_dir,
+                "output_mode": output_mode,
+                "write_output": write_output,
+                "df_binary_format": df_binary_format,
+                "df_write_csv": df_write_csv,
+                "backend": backend,
+                "adaptive_timestep": adaptive_timestep,
+                "dt_min": dt_min,
+                "dt_max": dt_max,
+                "dt_rel_tol": dt_rel_tol,
+                "dt_smooth_alpha": dt_smooth_alpha,
+                "dt_growth_factor": dt_growth_factor,
+                "dt_shrink_factor": dt_shrink_factor,
+                "dt_force_small_below_zeta": dt_force_small_below_zeta,
+                "dt_force_small_value": dt_force_small_value,
+                "spalla_stride": spalla_stride,
+                "spalla_inactive_threshold": spalla_inactive_threshold,
+                "spalla_lut": spalla_lut,
+                "spalla_lut_q_points": spalla_lut_q_points,
+                "spalla_lut_d_points": spalla_lut_d_points,
+                "spalla_lut_logq_min": spalla_lut_logq_min,
+                "spalla_lut_logq_max": spalla_lut_logq_max,
+                "spalla_lut_logd_min": spalla_lut_logd_min,
+                "spalla_lut_logd_max": spalla_lut_logd_max,
+                "interp_cache": interp_cache,
+                "interp_cache_mass_points": interp_cache_mass_points,
+                "interp_cache_zeta_points": interp_cache_zeta_points,
+                "interp_cache_binmax_points": interp_cache_binmax_points,
+                "interp_cache_zeta_max": interp_cache_zeta_max,
+                "interp_cache_guard": interp_cache_guard,
+                "interp_cache_guard_tol": interp_cache_guard_tol,
+                "interp_cache_guard_stride": interp_cache_guard_stride,
+                "interp_cache_guard_samples": interp_cache_guard_samples,
+                "interp_cache_guard_force_below_zeta": interp_cache_guard_force_below_zeta,
+                "interp_cache_guard_zeta_trigger": interp_cache_guard_zeta_trigger,
+                "profile_timing": profile_timing,
+                "return_results": True,
+                "mpi_subprocess": False,
+                "mpi_subprocess_ranks": 0,
+            }
+            return self._run_mpi_subprocess(mpi_subprocess_ranks=mpi_subprocess_ranks, kwargs=call_kwargs)
+
         cfg = RunConfig(
             endoftime=endoftime,
             sigmat=sigmat,
