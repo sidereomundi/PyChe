@@ -1,24 +1,52 @@
-# Tutorials
+# PyChe Full Tutorial
 
-## MinGCE argument mapping
+This guide is a complete practical tutorial for running PyChe in:
+- serial mode
+- MPI mode from shell
+- MPI mode directly from notebooks with in-memory returned results
 
-For calls like:
+It also covers diagnostics, plotting, and performance testing.
+
+## 1) Install
+
+From the repo root:
+
+```bash
+pip install -e .
+```
+
+Optional dependencies:
+
+```bash
+pip install -e .[all]
+```
+
+Cython optional build (recommended for speed):
+
+```bash
+pip install cython
+python setup.py build_ext --inplace
+```
+
+## 2) Core model call and argument mapping
+
+Positional form:
 
 ```python
 m.MinGCE(500, 3000.0, 50.0, 0.3, 0.0, 10000, 10000, ...)
 ```
 
-the variables are:
+maps to:
 
-1. `500` -> `endoftime`
-2. `3000.0` -> `sigmat`
-3. `50.0` -> `sigmah`
-4. `0.3` -> `psfr`
-5. `0.0` -> `pwind`
-6. `10000` -> `delay`
-7. `10000` -> `time_wind`
+1. `endoftime`
+2. `sigmat`
+3. `sigmah`
+4. `psfr`
+5. `pwind`
+6. `delay`
+7. `time_wind`
 
-Recommended style is to call with keyword args:
+Use keyword arguments for clarity:
 
 ```python
 m.MinGCE(
@@ -32,14 +60,14 @@ m.MinGCE(
 )
 ```
 
-## 1) Run and return arrays directly
+## 3) Serial in-memory run
 
 ```python
 from pyche import GCEModel
 
 m = GCEModel()
 res = m.MinGCE(
-    endoftime=500,
+    endoftime=13700,
     sigmat=3000.0,
     sigmah=50.0,
     psfr=0.3,
@@ -47,7 +75,8 @@ res = m.MinGCE(
     delay=10000,
     time_wind=10000,
     use_mpi=False,
-    show_progress=False,
+    show_progress=True,
+    backend="auto",
     output_mode="dataframe",
     write_output=False,
     return_results=True,
@@ -56,145 +85,174 @@ res = m.MinGCE(
 print(res.mod.shape, res.fis.shape)
 ```
 
-## 2) Compute diagnostics and full diagnostic plots from in-memory arrays
+## 4) MPI tutorial
 
-```python
-from pyche import GCEModel
-from pyche.diagnostics import diagnostics_from_tables
-import matplotlib.pyplot as plt
-
-m = GCEModel()
-res = m.MinGCE(
-    endoftime=500,
-    sigmat=3000.0,
-    sigmah=50.0,
-    psfr=0.3,
-    pwind=0.0,
-    delay=10000,
-    time_wind=10000,
-    use_mpi=False,
-    show_progress=False,
-    write_output=False,
-    return_results=True,
-)
-
-diag = diagnostics_from_tables(res.mod, res.fis)
-print(diag)
-
-fis_cols = {name: i for i, name in enumerate(res.fis_columns)}
-mod_cols = {name: i for i, name in enumerate(res.mod_columns)}
-t = res.fis[:, fis_cols["time"]]
-sfr = res.fis[:, fis_cols["sfr"]]
-zeta = res.fis[:, fis_cols["zeta"]]
-
-fig, ax = plt.subplots(1, 2, figsize=(10, 4))
-ax[0].plot(t, sfr)
-ax[0].set_title("SFR vs Time")
-ax[1].plot(t, zeta)
-ax[1].set_title("Zeta vs Time")
-plt.tight_layout()
-
-# Additional diagnostics from in-memory arrays:
-# - mass budget evolution
-# - [Fe/H] vs time
-# - [O/Fe], [Mg/Fe] vs [Fe/H]
-# - MDF histogram
-# Full code is shown in examples/diagnostic_plots.ipynb.
-```
-
-## 3) Run with files and create diagnostic plots
-
-```python
-from pyche import GCEModel, create_diagnostic_plots, read_outputs
-
-out_dir = "RISULTATI_PYCHE"
-m = GCEModel()
-m.MinGCE(
-    endoftime=1000,
-    sigmat=3000.0,
-    sigmah=50.0,
-    psfr=0.3,
-    pwind=0.0,
-    delay=10000,
-    time_wind=10000,
-    use_mpi=False,
-    show_progress=False,
-    output_dir=out_dir,
-    output_mode="dataframe",
-    df_binary_format="pickle",
-    df_write_csv=False,
-    write_output=True,
-    return_results=False,
-)
-
-paths = create_diagnostic_plots(out_dir, prefer="dataframe", binary_format="pickle")
-print(paths)
-
-# Load the saved run back into Python
-payload = read_outputs(out_dir, prefer="dataframe", binary_format="pickle")
-print(payload["mod"].shape, payload["fis"].shape, payload["format"])
-```
-
-## 4) Cython backend example (single process)
-
-```python
-from pyche import GCEModel
-
-m = GCEModel()
-m.MinGCE(
-    endoftime=1000,
-    sigmat=3000.0,
-    sigmah=50.0,
-    psfr=0.3,
-    pwind=0.0,
-    delay=10000,
-    time_wind=10000,
-    use_mpi=False,
-    show_progress=False,
-    backend="cython",  # requires compiled Cython extension support
-    output_mode="dataframe",
-    df_binary_format="pickle",
-    write_output=True,
-)
-```
-
-If you are unsure whether Cython extensions are available on your machine, use `backend="auto"` instead.
-
-Before forcing `backend="cython"`, compile extensions:
-
-```bash
-pip install cython
-python setup.py build_ext --inplace
-```
-
-## 5) MPI example with 4 ranks (recommended with auto backend)
+### 4.1 MPI run from shell (production pattern)
 
 ```bash
 mpiexec -n 4 python -c "from pyche import GCEModel; m=GCEModel(); m.MinGCE(13700,3000.0,50.0,0.3,0.0,10000,10000,use_mpi=True,show_progress=False,backend='auto',output_dir='RISULTATI_MPI4',output_mode='dataframe',df_binary_format='pickle')"
 ```
 
-## 6) MPI + Cython example with 4 ranks
+### 4.2 MPI + Cython from shell
 
 ```bash
 python setup.py build_ext --inplace
-mpiexec -n 4 python -c "from pyche import GCEModel; m=GCEModel(); m.MinGCE(13700,3000.0,50.0,0.3,0.0,10000,10000,use_mpi=True,show_progress=False,backend='cython',output_dir='RISULTATI_MPI4_CYTHON',output_mode='dataframe',df_binary_format='pickle')"
+mpiexec -n 4 python -c "from pyche import GCEModel; m=GCEModel(); m.MinGCE(13700,3000.0,50.0,0.3,0.0,10000,10000,use_mpi=True,show_progress=False,backend='cython',output_dir='RISULTATI_MPI4_CY',output_mode='dataframe',df_binary_format='pickle')"
 ```
 
-For repeat/median benchmarking workflows, see:
+### 4.3 MPI directly from notebook and return results as variables
 
-- `examples/mpi_cython_benchmark.ipynb`
+Use `mpi_subprocess=True`:
 
-## 7) Validate `interp_cache_guard_stride` against stride=1
+```python
+from pyche import GCEModel
+
+m = GCEModel()
+res = m.MinGCE(
+    endoftime=13700,
+    sigmat=3000.0,
+    sigmah=50.0,
+    psfr=0.3,
+    pwind=0.0,
+    delay=10000,
+    time_wind=10000,
+    use_mpi=True,
+    mpi_subprocess=True,
+    mpi_subprocess_ranks=4,
+    show_progress=True,
+    backend="auto",
+    output_mode="dataframe",
+    write_output=False,
+    return_results=True,
+)
+
+print(res.mod.shape, res.fis.shape)
+```
+
+Notes:
+- `mpi_subprocess=True` is for notebook convenience (in-memory return in the caller process).
+- It has overhead vs pure shell `mpiexec` because it serializes results back to the notebook.
+- For fastest benchmarking, use shell `mpiexec` + `show_progress=False`.
+
+### 4.4 MPI troubleshooting
+
+- If you see MPI implementation mismatch warnings, rebuild `mpi4py` with the same MPI used by `mpiexec`.
+- If notebook output is buffered, use `mpi_subprocess=True` (already handled by parent-side progress polling).
+- For clean timing comparisons, keep physics flags identical between serial and MPI runs.
+
+## 5) Output modes
+
+Common patterns:
+- `write_output=False, return_results=True`: in-memory only.
+- `write_output=True, return_results=False`: files only.
+- `write_output=True, return_results=True`: both.
+
+File mode example:
+
+```python
+from pyche import GCEModel, read_outputs
+
+out_dir = "RISULTATI_PYCHE"
+m = GCEModel()
+m.MinGCE(
+    endoftime=13700,
+    sigmat=3000.0,
+    sigmah=50.0,
+    psfr=0.3,
+    pwind=0.0,
+    delay=10000,
+    time_wind=10000,
+    use_mpi=False,
+    output_dir=out_dir,
+    output_mode="dataframe",
+    df_binary_format="pickle",
+    write_output=True,
+    return_results=False,
+)
+payload = read_outputs(out_dir, prefer="dataframe", binary_format="pickle")
+print(payload["mod"].shape, payload["fis"].shape, payload["format"])
+```
+
+## 6) Diagnostics and plots
+
+### 6.1 Diagnostics from in-memory arrays
+
+```python
+from pyche.diagnostics import diagnostics_from_tables
+
+diag = diagnostics_from_tables(res.mod, res.fis)
+print(diag)
+```
+
+### 6.2 Column names
+
+```python
+print("mod columns:", res.mod_columns)
+print("fis columns:", res.fis_columns)
+```
+
+### 6.3 Full diagnostic plots from saved outputs
+
+```python
+from pyche import create_diagnostic_plots
+
+paths = create_diagnostic_plots("RISULTATI_PYCHE", prefer="dataframe", binary_format="pickle")
+print(paths)
+```
+
+For full plotting code from `res.mod` and `res.fis` (SFR/Zeta, mass budget, [Fe/H], [O/Fe], [Mg/Fe], MDF), use:
+- `examples/diagnostic_plots.ipynb`
+
+## 7) Baseline vs optimized comparison
+
+You can compare a no-approx baseline to optimized settings:
+
+```python
+res_noapprox = m.MinGCE(
+    endoftime=13700,
+    sigmat=3000.0,
+    sigmah=50.0,
+    psfr=0.3,
+    pwind=0.0,
+    delay=10000,
+    time_wind=10000,
+    use_mpi=False,
+    backend="auto",
+    output_mode="dataframe",
+    write_output=False,
+    return_results=True,
+    adaptive_timestep=False,
+    interp_cache=False,
+    interp_cache_guard=False,
+    profile_timing=False,
+    spalla_stride=1,
+    spalla_inactive_threshold=0.0,
+    spalla_lut=False,
+)
+```
+
+Then compare tracks and MDF in `examples/diagnostic_plots.ipynb`.
+
+## 8) Recommended speed workflow
+
+1. Build Cython:
+   - `python setup.py build_ext --inplace`
+2. Start from `backend="auto"` (or force `cython` if known-good).
+3. Disable progress for benchmarks:
+   - `show_progress=False`
+4. Use MPI shell mode for clean speed tests.
+5. Use `profile_timing=True` to inspect `interp`, `wind`, `mpi_reduce`.
+
+## 9) Cache validation tool
+
+Validate cache stride behavior:
 
 ```bash
-python -m pyche.cache_validation --stride-test 4 --endoftime 2000
+python -m pyche.cache_validation --stride-test 4 --endoftime 13700
 ```
 
-This prints JSON metrics (max/p95/mean absolute differences for `[O/Fe]` and `[Fe/H]`).
+If you tune stride:
+- keep `interp_cache_guard=True`
+- test against stride 1
+- inspect O/Fe and Fe/H differences
 
-If you want to use `interp_cache_guard_stride>1` more safely, keep:
-
-- `interp_cache_guard_force_below_zeta=0.005`
-- `interp_cache_guard_zeta_trigger=2e-4`
-
-These force guard checks in low-metallicity and fast-changing metallicity regimes.

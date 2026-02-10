@@ -7,10 +7,10 @@ import base64
 import json
 import os
 import pickle
+import time
 import subprocess
 import sys
 import tempfile
-import time
 import numpy as np
 
 from .backends.factory import build_backend
@@ -62,8 +62,16 @@ class GCEModel:
         if mpi_subprocess_ranks < 2:
             raise ValueError("mpi_subprocess_ranks must be >= 2")
         payload = base64.b64encode(json.dumps(kwargs).encode("utf-8")).decode("ascii")
+        show_progress = bool(kwargs.get("show_progress", False))
+        endoftime = int(kwargs.get("endoftime", 0))
+        if show_progress:
+            kwargs = dict(kwargs)
+            kwargs["show_progress"] = False
+            payload = base64.b64encode(json.dumps(kwargs).encode("utf-8")).decode("ascii")
         fd, result_path = tempfile.mkstemp(prefix="pyche_mpi_result_", suffix=".pkl")
         os.close(fd)
+        fd_p, progress_path = tempfile.mkstemp(prefix="pyche_mpi_progress_", suffix=".txt")
+        os.close(fd_p)
         cmd = [
             "mpiexec",
             "-n",
@@ -76,10 +84,49 @@ class GCEModel:
         ]
         env = dict(os.environ)
         env["PYCHE_MPI_RESULT_PATH"] = result_path
+        env["PYCHE_PROGRESS_PATH"] = progress_path
+        progress_use_carriage = bool(getattr(sys.stdout, "isatty", lambda: False)())
+        last_pct = -1
+
+        def _print_parent_progress(step: int) -> None:
+            nonlocal last_pct
+            if not show_progress or endoftime <= 0:
+                return
+            step = max(0, min(int(step), endoftime))
+            pct = int((100.0 * step) / endoftime)
+            if pct == last_pct:
+                return
+            last_pct = pct
+            bar_w = 30
+            fill = int(bar_w * step / endoftime)
+            bar = "#" * fill + "-" * (bar_w - fill)
+            msg = f"Progress [{bar}] {100.0 * step / endoftime:6.2f}% ({step}/{endoftime})"
+            if progress_use_carriage:
+                sys.stdout.write(f"\r{msg}")
+                sys.stdout.flush()
+            else:
+                print(msg, flush=True)
         try:
-            proc = subprocess.run(cmd, env=env)
-            if proc.returncode != 0:
-                raise RuntimeError(f"mpiexec failed with code {proc.returncode}")
+            proc = subprocess.Popen(cmd, env=env)
+            while True:
+                rc = proc.poll()
+                try:
+                    with open(progress_path, "r", encoding="utf-8") as f:
+                        raw = f.read().strip()
+                    if raw:
+                        _print_parent_progress(int(raw))
+                except (OSError, ValueError):
+                    pass
+                if rc is not None:
+                    if rc != 0:
+                        raise RuntimeError(f"mpiexec failed with code {rc}")
+                    break
+                time.sleep(0.25)
+            if show_progress and endoftime > 0:
+                _print_parent_progress(endoftime)
+                if progress_use_carriage:
+                    sys.stdout.write("\n")
+                    sys.stdout.flush()
             if not os.path.exists(result_path):
                 raise RuntimeError("MPI subprocess did not produce a result payload")
             with open(result_path, "rb") as f:
@@ -90,6 +137,10 @@ class GCEModel:
         finally:
             try:
                 os.remove(result_path)
+            except OSError:
+                pass
+            try:
+                os.remove(progress_path)
             except OSError:
                 pass
 

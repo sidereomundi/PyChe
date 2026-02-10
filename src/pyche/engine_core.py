@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 from time import perf_counter
@@ -67,6 +68,7 @@ def run_mingce_loop(
     last_progress_step = 0
     progress_stride = max(1, cfg.endoftime // 200) if cfg.endoftime > 0 else 1
     progress_use_carriage = bool(getattr(sys.stdout, "isatty", lambda: False)())
+    progress_path = os.getenv("PYCHE_PROGRESS_PATH", "").strip() if rank == 0 else ""
     gas_floor = 1.0e-20
     stage_sec = {"interp": 0.0, "mpi_reduce": 0.0, "death": 0.0, "wind": 0.0, "output": 0.0}
     total_t0 = perf_counter()
@@ -119,6 +121,12 @@ def run_mingce_loop(
         mpi_q_view = mpi_reduce_buf[qi_slice].reshape(qispecial.shape)
 
     def _print_progress(step: int) -> None:
+        if progress_path:
+            try:
+                with open(progress_path, "w", encoding="utf-8") as f:
+                    f.write(str(int(step)))
+            except OSError:
+                pass
         if not (cfg.show_progress and rank == 0 and cfg.endoftime > 0):
             return
         pct = 100.0 * step / cfg.endoftime
