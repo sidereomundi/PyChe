@@ -82,10 +82,13 @@ def run_mingce_loop(
     rel_ema_init = False
     stable_steps = 0
 
-    # Static infall profile: allv depends only on (sigmat, sigmah, delay), not on the evolving state arrays.
+    # Static infall profile: either parameterized (original model) or user-provided infall(t).
     if cfg.endoftime > 0:
         tt = np.arange(1, cfg.endoftime + 1, dtype=float)
-        if cfg.sigmat != 0.0:
+        if cfg.infall_time is not None and cfg.infall_values is not None:
+            infall = np.interp(tt, np.asarray(cfg.infall_time, dtype=float), np.asarray(cfg.infall_values, dtype=float))
+            allv[1 : cfg.endoftime + 1] = np.cumsum(infall, dtype=float)
+        elif cfg.sigmat != 0.0:
             coeff = cfg.sigmah * superf / (2.5 * cfg.sigmat)
             infall = coeff * np.exp(-((tt - cfg.delay) ** 2) / (2.0 * cfg.sigmat**2))
             allv[1 : cfg.endoftime + 1] = np.cumsum(infall, dtype=float)
@@ -101,9 +104,6 @@ def run_mingce_loop(
     local_bins_arr = np.asarray(list(local_bins), dtype=np.int32)
     interp = model.interpolator.interp
     interp_many_step = getattr(model.interpolator, "interp_many_step", None)
-    use_sfr_input = cfg.sfr_time is not None and cfg.sfr_values is not None
-    sfr_time = np.asarray(cfg.sfr_time, dtype=float) if use_sfr_input else None
-    sfr_values = np.asarray(cfg.sfr_values, dtype=float) if use_sfr_input else None
     next_dt = 1
     use_cyengine = bool(cfg.backend in {"cython", "auto"} and _cyengine is not None)
     use_spalla_lut = bool(use_cyengine and cfg.spalla_lut)
@@ -177,32 +177,21 @@ def run_mingce_loop(
             - wind[t : cfg.endoftime + 1]
         )
 
-        if use_sfr_input:
-            assert sfr_time is not None
-            assert sfr_values is not None
-            step_times = np.arange(t_prev + 1, t + 1, dtype=float)
-            sfr_step = np.interp(step_times, sfr_time, sfr_values)
-            sfr = float(sfr_step[-1])
-            sfr_mass = float(np.sum(sfr_step))
-            sfr_hist[t] = sfr
-            if dt_scale > 1:
-                sfr_hist[t_prev + 1 : t] = sfr_step[:-1]
+        if gas[t] / superf > threshold and cfg.sigmah != 0.0:
+            sfr = (
+                cfg.psfr
+                * (gas[t] / (superf * cfg.sigmah)) ** kappa
+                * (cfg.sigmah / sigmasun) ** (kappa - 1.0)
+                * (8.0 / rm)
+                * (superf / 1000.0)
+                * cfg.sigmah
+            )
         else:
-            if gas[t] / superf > threshold and cfg.sigmah != 0.0:
-                sfr = (
-                    cfg.psfr
-                    * (gas[t] / (superf * cfg.sigmah)) ** kappa
-                    * (cfg.sigmah / sigmasun) ** (kappa - 1.0)
-                    * (8.0 / rm)
-                    * (superf / 1000.0)
-                    * cfg.sigmah
-                )
-            else:
-                sfr = 0.0
-            sfr_hist[t] = sfr
-            if dt_scale > 1:
-                sfr_hist[t_prev + 1 : t] = sfr
-            sfr_mass = sfr * float(dt_scale)
+            sfr = 0.0
+        sfr_hist[t] = sfr
+        if dt_scale > 1:
+            sfr_hist[t_prev + 1 : t] = sfr
+        sfr_mass = sfr * float(dt_scale)
 
         if gas[t] / superf >= threshold:
             interp_t0 = perf_counter()
