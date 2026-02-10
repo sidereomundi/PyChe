@@ -66,6 +66,7 @@ def run_mingce_loop(
     t = 0
     last_progress_step = 0
     progress_stride = max(1, cfg.endoftime // 200) if cfg.endoftime > 0 else 1
+    progress_use_carriage = bool(getattr(sys.stdout, "isatty", lambda: False)())
     gas_floor = 1.0e-20
     stage_sec = {"interp": 0.0, "mpi_reduce": 0.0, "death": 0.0, "wind": 0.0, "output": 0.0}
     total_t0 = perf_counter()
@@ -124,8 +125,12 @@ def run_mingce_loop(
         bar_w = 30
         fill = int(bar_w * step / cfg.endoftime)
         bar = "#" * fill + "-" * (bar_w - fill)
-        sys.stdout.write(f"\rProgress [{bar}] {pct:6.2f}% ({step}/{cfg.endoftime})")
-        sys.stdout.flush()
+        msg = f"Progress [{bar}] {pct:6.2f}% ({step}/{cfg.endoftime})"
+        if progress_use_carriage:
+            sys.stdout.write(f"\r{msg}")
+            sys.stdout.flush()
+        else:
+            print(msg, flush=True)
 
     while t < cfg.endoftime:
         if cfg.adaptive_timestep:
@@ -423,8 +428,9 @@ def run_mingce_loop(
     if rank == 0:
         if cfg.show_progress and cfg.endoftime > 0:
             _print_progress(cfg.endoftime)
-            sys.stdout.write("\n")
-            sys.stdout.flush()
+            if progress_use_carriage:
+                sys.stdout.write("\n")
+                sys.stdout.flush()
 
         out_t0 = perf_counter()
         mod_rows = build_mod_rows(cfg.endoftime, allv, gas, stars, sfr_hist, oldstars, qqn)
