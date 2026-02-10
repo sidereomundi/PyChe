@@ -130,6 +130,8 @@ def run_mingce_loop(
     while t < cfg.endoftime:
         if cfg.adaptive_timestep:
             step_dt = max(cfg.dt_min, min(cfg.dt_max, int(next_dt)))
+            if zeta[t] < cfg.dt_force_small_below_zeta:
+                step_dt = min(step_dt, cfg.dt_force_small_value)
         else:
             step_dt = 1
         t_prev = t
@@ -414,6 +416,8 @@ def run_mingce_loop(
                         grown = int(np.ceil(max(1.0, proposed) * cfg.dt_growth_factor))
                         proposed = min(cfg.dt_max, max(proposed, grown))
                         stable_steps = 0
+                if zeta[t] < cfg.dt_force_small_below_zeta:
+                    proposed = min(proposed, cfg.dt_force_small_value)
                 next_dt = proposed
 
     if rank == 0:

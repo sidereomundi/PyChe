@@ -19,18 +19,20 @@ class RunConfig:
     mpi_nonblocking_reduce: bool = False
     show_progress: bool = True
     output_dir: str | None = None
-    output_mode: str = "legacy"
+    output_mode: str = "dataframe"
     write_output: bool = True
     df_binary_format: str = "pickle"
     df_write_csv: bool = False
     backend: str = "auto"
     adaptive_timestep: bool = True
     dt_min: int = 1
-    dt_max: int = 5
-    dt_rel_tol: float = 0.1
+    dt_max: int = 10
+    dt_rel_tol: float = 0.2
     dt_smooth_alpha: float = 0.3
-    dt_growth_factor: float = 1.25
+    dt_growth_factor: float = 1.5
     dt_shrink_factor: float = 0.5
+    dt_force_small_below_zeta: float = 1.0e-4
+    dt_force_small_value: int = 1
     spalla_stride: int = 4
     spalla_inactive_threshold: float = 1.0e-12
     spalla_lut: bool = True
@@ -78,6 +80,10 @@ class RunConfig:
             raise ValueError("dt_growth_factor must be >= 1")
         if not (0.0 < self.dt_shrink_factor <= 1.0):
             raise ValueError("dt_shrink_factor must be in (0, 1]")
+        if self.dt_force_small_below_zeta < 0.0:
+            raise ValueError("dt_force_small_below_zeta must be >= 0")
+        if self.dt_force_small_value < self.dt_min or self.dt_force_small_value > self.dt_max:
+            raise ValueError("dt_force_small_value must be within [dt_min, dt_max]")
         if self.spalla_stride < 1:
             raise ValueError("spalla_stride must be >= 1")
         if self.spalla_inactive_threshold < 0.0:
