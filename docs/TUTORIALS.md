@@ -120,6 +120,7 @@ res = m.GCE(
     mpi_subprocess=True,
     mpi_subprocess_ranks=4,
     show_progress=True,
+    progress_style="compact",  # auto|single|line|compact|off
     backend="auto",
     output_mode="dataframe",
     write_output=False,
@@ -133,6 +134,12 @@ Notes:
 - `mpi_subprocess=True` is for notebook convenience (in-memory return in the caller process).
 - It has overhead vs pure shell `mpiexec` because it serializes results back to the notebook.
 - For fastest benchmarking, use shell `mpiexec` + `show_progress=False`.
+- `progress_style` controls notebook progress formatting in `mpi_subprocess` mode:
+  - `auto`: notebook -> `compact`, terminal -> `single`
+  - `single`: single updating line
+  - `line`: one line per update
+  - `compact`: reduced updates (about every 5%)
+  - `off`: no progress output
 
 ### 4.4 MPI troubleshooting
 
@@ -255,4 +262,3 @@ If you tune stride:
 - keep `interp_cache_guard=True`
 - test against stride 1
 - inspect O/Fe and Fe/H differences
-

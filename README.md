@@ -94,6 +94,11 @@ You can choose file output, in-memory return, or both:
 - `write_output=False`, `return_results=True`: return arrays only.
 - `write_output=True`, `return_results=True`: both.
 
+For notebook MPI runs (`use_mpi=True`, `mpi_subprocess=True`), you can tune progress formatting with:
+- `progress_style="auto"` (default)
+- `progress_style="compact"` (recommended to reduce line spam)
+- `progress_style="single" | "line" | "off"`
+
 ## Backend Notes
 
 - `backend="auto"` is recommended. It falls back safely to NumPy.

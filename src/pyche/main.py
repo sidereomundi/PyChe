@@ -63,6 +63,7 @@ class GCEModel:
             raise ValueError("mpi_subprocess_ranks must be >= 2")
         payload = base64.b64encode(json.dumps(kwargs).encode("utf-8")).decode("ascii")
         show_progress = bool(kwargs.get("show_progress", False))
+        progress_style = str(kwargs.get("progress_style", "auto")).strip().lower()
         endoftime = int(kwargs.get("endoftime", 0))
         if show_progress:
             kwargs = dict(kwargs)
@@ -85,31 +86,42 @@ class GCEModel:
         env = dict(os.environ)
         env["PYCHE_MPI_RESULT_PATH"] = result_path
         env["PYCHE_PROGRESS_PATH"] = progress_path
-        # Force single-line progress updates for mpi_subprocess.
-        progress_use_carriage = True
+        if progress_style not in {"auto", "single", "line", "compact", "off"}:
+            raise ValueError("progress_style must be one of: auto, single, line, compact, off")
+        notebook_mode = "ipykernel" in sys.modules
+        if progress_style == "auto":
+            progress_style = "compact" if notebook_mode else "single"
+        progress_use_carriage = progress_style == "single"
         display_handle = None
         display_fn = None
         display_handle_cls = None
-        use_ipy_display = False
+        use_ipy_display = notebook_mode and progress_style == "single"
         try:
-            if "ipykernel" in sys.modules:
+            if use_ipy_display:
                 from IPython.display import DisplayHandle, display  # type: ignore
 
-                use_ipy_display = True
                 display_fn = display
                 display_handle_cls = DisplayHandle
         except Exception:
             use_ipy_display = False
         last_pct = -1
+        last_compact_bucket = -1
 
         def _print_parent_progress(step: int) -> None:
-            nonlocal last_pct, display_handle
+            nonlocal last_pct, display_handle, last_compact_bucket
             if not show_progress or endoftime <= 0:
+                return
+            if progress_style == "off":
                 return
             step = max(0, min(int(step), endoftime))
             pct = int((100.0 * step) / endoftime)
             if pct == last_pct:
                 return
+            if progress_style == "compact":
+                bucket = pct // 5
+                if bucket == last_compact_bucket and pct < 100:
+                    return
+                last_compact_bucket = bucket
             last_pct = pct
             bar_w = 30
             fill = int(bar_w * step / endoftime)
@@ -179,6 +191,7 @@ class GCEModel:
         use_mpi: bool = True,
         mpi_nonblocking_reduce: bool = False,
         show_progress: bool = True,
+        progress_style: str = "auto",
         output_dir: str | None = None,
         output_mode: str = "dataframe",
         write_output: bool = True,
@@ -232,6 +245,7 @@ class GCEModel:
                 "use_mpi": True,
                 "mpi_nonblocking_reduce": mpi_nonblocking_reduce,
                 "show_progress": show_progress,
+                "progress_style": progress_style,
                 "output_dir": output_dir,
                 "output_mode": output_mode,
                 "write_output": write_output,
