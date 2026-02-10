@@ -5,9 +5,11 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 import base64
 import json
+import os
 import pickle
 import subprocess
 import sys
+import tempfile
 import time
 import numpy as np
 
@@ -60,40 +62,36 @@ class GCEModel:
         if mpi_subprocess_ranks < 2:
             raise ValueError("mpi_subprocess_ranks must be >= 2")
         payload = base64.b64encode(json.dumps(kwargs).encode("utf-8")).decode("ascii")
+        fd, result_path = tempfile.mkstemp(prefix="pyche_mpi_result_", suffix=".pkl")
+        os.close(fd)
         cmd = [
             "mpiexec",
             "-n",
             str(int(mpi_subprocess_ranks)),
             sys.executable,
+            "-u",
             "-m",
             "pyche._mpiexec_bridge",
             payload,
         ]
-        proc = subprocess.run(cmd, capture_output=True, text=True)
-        if proc.returncode != 0:
-            msg = proc.stderr.strip() or proc.stdout.strip() or f"mpiexec failed with code {proc.returncode}"
-            raise RuntimeError(msg)
-        marker = "PYCHE_RESULT_BASE64:"
-        idx = proc.stdout.find(marker)
-        if idx < 0:
-            out_tail = proc.stdout[-1000:].strip()
-            err_tail = proc.stderr[-1000:].strip()
-            debug = out_tail or err_tail or "no stdout/stderr output"
-            raise RuntimeError(f"MPI subprocess did not return a result payload. Tail output:\n{debug}")
-        rest = proc.stdout[idx + len(marker) :]
-        blob_chars = []
-        for ch in rest:
-            if ch.isalnum() or ch in "+/=":
-                blob_chars.append(ch)
-            else:
-                break
-        blob = "".join(blob_chars).strip()
-        if not blob:
-            raise RuntimeError("MPI subprocess returned an empty result payload")
-        obj = pickle.loads(base64.b64decode(blob.encode("ascii")))
-        if not isinstance(obj, MinGCEResult):
-            raise RuntimeError("MPI subprocess returned invalid result payload")
-        return obj
+        env = dict(os.environ)
+        env["PYCHE_MPI_RESULT_PATH"] = result_path
+        try:
+            proc = subprocess.run(cmd, env=env)
+            if proc.returncode != 0:
+                raise RuntimeError(f"mpiexec failed with code {proc.returncode}")
+            if not os.path.exists(result_path):
+                raise RuntimeError("MPI subprocess did not produce a result payload")
+            with open(result_path, "rb") as f:
+                obj = pickle.load(f)
+            if not isinstance(obj, MinGCEResult):
+                raise RuntimeError("MPI subprocess returned invalid result payload")
+            return obj
+        finally:
+            try:
+                os.remove(result_path)
+            except OSError:
+                pass
 
     def MinGCE(
         self,

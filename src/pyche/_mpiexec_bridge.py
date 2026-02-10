@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import pickle
 import sys
 
@@ -28,8 +29,13 @@ def main() -> int:
     if MPI is not None:
         rank = int(MPI.COMM_WORLD.Get_rank())
     if rank == 0:
-        blob = base64.b64encode(pickle.dumps(res)).decode("ascii")
-        print(f"PYCHE_RESULT_BASE64:{blob}")
+        result_path = os.getenv("PYCHE_MPI_RESULT_PATH", "").strip()
+        if result_path:
+            with open(result_path, "wb") as f:
+                pickle.dump(res, f)
+        else:
+            blob = base64.b64encode(pickle.dumps(res)).decode("ascii")
+            print(f"PYCHE_RESULT_BASE64:{blob}")
     return 0
 
 
