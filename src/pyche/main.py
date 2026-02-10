@@ -85,7 +85,8 @@ class GCEModel:
         env = dict(os.environ)
         env["PYCHE_MPI_RESULT_PATH"] = result_path
         env["PYCHE_PROGRESS_PATH"] = progress_path
-        progress_use_carriage = bool(getattr(sys.stdout, "isatty", lambda: False)())
+        # Force single-line progress updates for mpi_subprocess.
+        progress_use_carriage = True
         last_pct = -1
 
         def _print_parent_progress(step: int) -> None:
@@ -110,6 +111,10 @@ class GCEModel:
             proc = subprocess.Popen(cmd, env=env)
             while True:
                 rc = proc.poll()
+                if rc is not None:
+                    if rc != 0:
+                        raise RuntimeError(f"mpiexec failed with code {rc}")
+                    break
                 try:
                     with open(progress_path, "r", encoding="utf-8") as f:
                         raw = f.read().strip()
@@ -117,16 +122,12 @@ class GCEModel:
                         _print_parent_progress(int(raw))
                 except (OSError, ValueError):
                     pass
-                if rc is not None:
-                    if rc != 0:
-                        raise RuntimeError(f"mpiexec failed with code {rc}")
-                    break
                 time.sleep(0.25)
             if show_progress and endoftime > 0:
+                last_pct = -1
                 _print_parent_progress(endoftime)
-                if progress_use_carriage:
-                    sys.stdout.write("\n")
-                    sys.stdout.flush()
+                sys.stdout.write("\n")
+                sys.stdout.flush()
             if not os.path.exists(result_path):
                 raise RuntimeError("MPI subprocess did not produce a result payload")
             with open(result_path, "rb") as f:
