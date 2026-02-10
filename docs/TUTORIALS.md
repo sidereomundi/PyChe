@@ -183,3 +183,11 @@ mpiexec -n 4 python -c "from pyche import GCEModel; m=GCEModel(); m.MinGCE(13700
 For repeat/median benchmarking workflows, see:
 
 - `examples/mpi_cython_benchmark.ipynb`
+
+## 7) Validate `interp_cache_guard_stride` against stride=1
+
+```bash
+python -m pyche.cache_validation --stride-test 4 --endoftime 2000
+```
+
+This prints JSON metrics (max/p95/mean absolute differences for `[O/Fe]` and `[Fe/H]`).

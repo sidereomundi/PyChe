@@ -102,6 +102,12 @@ You can choose file output, in-memory return, or both:
   - `pip install cython`
   - `python setup.py build_ext --inplace`
 
+Cache-stride validation helper (one command):
+
+```bash
+python -m pyche.cache_validation --stride-test 4 --endoftime 2000
+```
+
 ## Documentation
 
 - `docs/INSTALL.md`
