@@ -7,7 +7,10 @@ unused slot so 1-based Fortran indices map directly to Python indices.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, fields as dataclass_fields
+import hashlib
+import json
+import os
 from pathlib import Path
 
 import numpy as np
@@ -15,6 +18,7 @@ import numpy as np
 PACKAGE_DIR = Path(__file__).resolve().parent
 DATA_DIR = PACKAGE_DIR / "data"
 BASE_DIR = PACKAGE_DIR
+TABLE_CACHE_VERSION = 1
 
 
 @dataclass
@@ -63,6 +67,118 @@ class FortranState:
 class IORoutines:
     base_dati: Path = field(default_factory=lambda: DATA_DIR / "DATI")
     base_yieldsba: Path = field(default_factory=lambda: DATA_DIR / "YIELDSBA")
+    enable_table_cache: bool = True
+    table_cache_dir: Path | None = None
+
+    def _resolve_table_cache_dir(self) -> Path:
+        if self.table_cache_dir is not None:
+            return Path(self.table_cache_dir)
+        env_dir = os.getenv("PYCHE_TABLE_CACHE_DIR")
+        if env_dir:
+            return Path(env_dir).expanduser()
+        return Path.home() / ".cache" / "pyche"
+
+    def _table_source_files(self, lowmassive: int, mm: int) -> list[Path]:
+        if lowmassive == 1:
+            inputyield = ["WW95aMD.csv", "WW95bMD.csv", "WW95cMD.csv", "WW95dMD.csv", "WW95e.csv"]
+            if mm == 1:
+                inputyield[4] = "WW95eMM.csv"
+            elif mm == 2:
+                inputyield[4] = "WW95eMD.csv"
+        else:
+            inputyield = [
+                "WW95zeroMD.K0001.csv",
+                "WW95-4MD.K004.csv",
+                "WW95-2MD.K008.csv",
+                "WW95-1MD.K02.csv",
+                "WW9502.K02.csv",
+            ]
+            if mm == 1:
+                inputyield[4] = "WW9502MM.K02.csv"
+            elif mm == 2:
+                inputyield[4] = "WW9502MD.K02.csv"
+
+        dati_files = inputyield + [
+            "Kobayashi-Iron.dat",
+            "Kobayashi-IronHyper.dat",
+            "Cris0.dat",
+            "Cris8.dat",
+            "Cris5.dat",
+            "Cris004.dat",
+            "Cris02.dat",
+            "Bariumnew.dat",
+            "Strontiumnew.dat",
+            "Yttriumnew.dat",
+            "Lantanumnew.dat",
+            "Zirconiumnew.dat",
+            "Rubidiumnew.dat",
+            "Europiumnew.dat",
+        ]
+        yieldsba_files = [
+            "CristalloBa2.dat",
+            "CristalloSr.dat",
+            "CristalloY.dat",
+            "CristalloEu.dat",
+            "CristalloZr.dat",
+            "CristalloLa.dat",
+            "CristalloRb.dat",
+            "KarakasLi.dat",
+        ]
+        return [self.base_dati / name for name in dati_files] + [self.base_yieldsba / name for name in yieldsba_files]
+
+    def _table_cache_token(self, lowmassive: int, mm: int) -> str:
+        entries: list[tuple[str, int, int]] = []
+        for path in self._table_source_files(lowmassive=lowmassive, mm=mm):
+            st = path.stat()
+            entries.append((path.name, int(st.st_size), int(st.st_mtime_ns)))
+        payload = {
+            "version": TABLE_CACHE_VERSION,
+            "lowmassive": int(lowmassive),
+            "mm": int(mm),
+            "sources": entries,
+        }
+        raw = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+        return hashlib.sha256(raw).hexdigest()[:16]
+
+    def _table_cache_path(self, lowmassive: int, mm: int) -> Path:
+        token = self._table_cache_token(lowmassive=lowmassive, mm=mm)
+        cache_dir = self._resolve_table_cache_dir()
+        return cache_dir / f"model_tables_v{TABLE_CACHE_VERSION}_lm{int(lowmassive)}_mm{int(mm)}_{token}.npz"
+
+    def _load_table_cache(self, lowmassive: int, mm: int):
+        from .model_tables import ModelTables
+
+        path = self._table_cache_path(lowmassive=lowmassive, mm=mm)
+        if not path.exists():
+            return None
+
+        try:
+            with np.load(path, allow_pickle=False) as data:
+                kwargs = {}
+                for f in dataclass_fields(ModelTables):
+                    if f.name not in data:
+                        return None
+                    if f.name == "ninputyield":
+                        kwargs[f.name] = int(data[f.name])
+                    else:
+                        kwargs[f.name] = np.asarray(data[f.name], dtype=float)
+            return ModelTables(**kwargs)
+        except Exception:
+            return None
+
+    def _save_table_cache(self, lowmassive: int, mm: int, tables: object) -> None:
+        path = self._table_cache_path(lowmassive=lowmassive, mm=mm)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        payload = {}
+        for f in dataclass_fields(type(tables)):
+            value = getattr(tables, f.name)
+            if f.name == "ninputyield":
+                payload[f.name] = np.array(int(value), dtype=np.int64)
+            else:
+                payload[f.name] = np.asarray(value)
+        tmp = path.with_suffix(".tmp.npz")
+        np.savez(tmp, **payload)
+        tmp.replace(path)
 
     def _read_numeric_table(self, path: Path, skiprows: int = 0) -> np.ndarray:
         return np.loadtxt(path, skiprows=skiprows)
@@ -278,6 +394,17 @@ class IORoutines:
         """Load tables and return immutable ``ModelTables`` representation."""
         from .model_tables import ModelTables
 
+        if self.enable_table_cache:
+            cached = self._load_table_cache(lowmassive=lowmassive, mm=mm)
+            if cached is not None:
+                return cached
+
         state = FortranState()
         self.load_main_tables(state, lowmassive=lowmassive, mm=mm)
-        return ModelTables.from_state(state)
+        tables = ModelTables.from_state(state)
+        if self.enable_table_cache:
+            try:
+                self._save_table_cache(lowmassive=lowmassive, mm=mm, tables=tables)
+            except Exception:
+                pass
+        return tables
