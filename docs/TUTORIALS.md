@@ -240,9 +240,9 @@ res_noapprox = m.GCE(
 
 Then compare tracks and MDF in `examples/diagnostic_plots.ipynb`.
 
-## 8) Custom infall input (this branch)
+## 8) Custom infall input
 
-On branch `feature/sfr-input-array`, you can provide infall directly as a time series:
+You can provide infall directly as a time series:
 
 - `infall_time`: strictly increasing time grid (Myr), can be non-integer
 - `infall_values`: infall values on that grid
