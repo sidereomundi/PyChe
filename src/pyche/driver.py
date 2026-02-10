@@ -8,7 +8,7 @@ from pyche.main import GCEModel
 
 def main() -> None:
     model = GCEModel()
-    model.MinGCE(0, 0.0, 0.0, 0.0, 0.0, 0, 0)
+    model.GCE(0, 0.0, 0.0, 0.0, 0.0, 0, 0)
 
 
 if __name__ == "__main__":

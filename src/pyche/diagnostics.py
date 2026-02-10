@@ -1,4 +1,4 @@
-"""Diagnostic routines for MinGCE outputs."""
+"""Diagnostic routines for GCE outputs."""
 
 from __future__ import annotations
 

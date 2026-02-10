@@ -1,4 +1,4 @@
-"""Serial frontend for MinGCE engine execution."""
+"""Serial frontend for GCE engine execution."""
 
 from __future__ import annotations
 

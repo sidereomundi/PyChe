@@ -1,4 +1,4 @@
-"""Immutable table container for MinGCE inputs."""
+"""Immutable table container for GCE inputs."""
 
 from __future__ import annotations
 

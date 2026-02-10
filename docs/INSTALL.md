@@ -42,12 +42,12 @@ Single process with Cython backend:
 
 ```bash
 python setup.py build_ext --inplace
-python -c "from pyche import GCEModel; m=GCEModel(); m.MinGCE(1000,3000.0,50.0,0.3,0.0,10000,10000,use_mpi=False,backend='cython',show_progress=False)"
+python -c "from pyche import GCEModel; m=GCEModel(); m.GCE(1000,3000.0,50.0,0.3,0.0,10000,10000,use_mpi=False,backend='cython',show_progress=False)"
 ```
 
 MPI run with Cython backend:
 
 ```bash
 python setup.py build_ext --inplace
-mpiexec -n 8 python -c "from pyche import GCEModel; m=GCEModel(); m.MinGCE(13700,3000.0,50.0,0.3,0.0,10000,10000,use_mpi=True,backend='cython',show_progress=False)"
+mpiexec -n 8 python -c "from pyche import GCEModel; m=GCEModel(); m.GCE(13700,3000.0,50.0,0.3,0.0,10000,10000,use_mpi=True,backend='cython',show_progress=False)"
 ```

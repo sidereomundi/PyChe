@@ -1,5 +1,5 @@
 # cython: language_level=3, boundscheck=False, wraparound=False, cdivision=True
-"""Cython engine helpers for MinGCE hot loops."""
+"""Cython engine helpers for GCE hot loops."""
 
 import numpy as np
 cimport numpy as cnp

@@ -1,4 +1,4 @@
-"""Engine dispatcher for MinGCE execution."""
+"""Engine dispatcher for GCE execution."""
 
 from __future__ import annotations
 
@@ -25,7 +25,7 @@ def run_mingce(
     ss2: int,
     elem: int = 33,
 ) -> dict[str, np.ndarray] | None:
-    """Dispatch MinGCE execution to serial or MPI frontend."""
+    """Dispatch GCE execution to serial or MPI frontend."""
     if cfg.use_mpi:
         return run_mingce_mpi(
             model,

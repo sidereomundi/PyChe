@@ -1,4 +1,4 @@
-"""Internal MPI bridge: run MinGCE under mpiexec and emit pickled result on rank 0."""
+"""Internal MPI bridge: run GCE under mpiexec and emit pickled result on rank 0."""
 
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ def main() -> int:
     payload = sys.argv[1]
     kwargs = json.loads(base64.b64decode(payload.encode("ascii")).decode("utf-8"))
     model = GCEModel()
-    res = model.MinGCE(**kwargs)
+    res = model.GCE(**kwargs)
 
     rank = 0
     if MPI is not None:

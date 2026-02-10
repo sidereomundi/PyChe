@@ -34,7 +34,7 @@ python setup.py build_ext --inplace
 from pyche import GCEModel
 
 m = GCEModel()
-result = m.MinGCE(
+result = m.GCE(
     endoftime=200,
     sigmat=2000.0,
     sigmah=54.0,
@@ -56,10 +56,10 @@ fis = result.fis
 
 ## Core Parameters
 
-`MinGCE` positional arguments map as:
+`GCE` positional arguments map as:
 
 ```python
-m.MinGCE(
+m.GCE(
     endoftime,   # total simulated timesteps
     sigmat,      # infall timescale width
     sigmah,      # surface-density normalization
@@ -74,7 +74,7 @@ m.MinGCE(
 Example:
 
 ```python
-m.MinGCE(
+m.GCE(
     endoftime=500,
     sigmat=3000.0,
     sigmah=50.0,

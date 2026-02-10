@@ -1,6 +1,6 @@
-"""Python reimplementation of the Fortran ``MinGCE`` code."""
+"""Python reimplementation of the Fortran ``GCE`` code."""
 
-from .main import GCEModel, MinGCEResult
+from .main import GCEModel, GCEResult
 from .interpolation import Interpolator, InterpolationData
 from .interpolation_api import InterpolationKernel, ModelInterpolator
 from .output_reader import read_outputs
@@ -15,7 +15,7 @@ from .tau import tau
 
 __all__ = [
     "GCEModel",
-    "MinGCEResult",
+    "GCEResult",
     "Interpolator",
     "InterpolationData",
     "InterpolationKernel",

@@ -33,7 +33,7 @@ python setup.py build_ext --inplace
 Positional form:
 
 ```python
-m.MinGCE(500, 3000.0, 50.0, 0.3, 0.0, 10000, 10000, ...)
+m.GCE(500, 3000.0, 50.0, 0.3, 0.0, 10000, 10000, ...)
 ```
 
 maps to:
@@ -49,7 +49,7 @@ maps to:
 Use keyword arguments for clarity:
 
 ```python
-m.MinGCE(
+m.GCE(
     endoftime=500,
     sigmat=3000.0,
     sigmah=50.0,
@@ -66,7 +66,7 @@ m.MinGCE(
 from pyche import GCEModel
 
 m = GCEModel()
-res = m.MinGCE(
+res = m.GCE(
     endoftime=13700,
     sigmat=3000.0,
     sigmah=50.0,
@@ -90,14 +90,14 @@ print(res.mod.shape, res.fis.shape)
 ### 4.1 MPI run from shell (production pattern)
 
 ```bash
-mpiexec -n 4 python -c "from pyche import GCEModel; m=GCEModel(); m.MinGCE(13700,3000.0,50.0,0.3,0.0,10000,10000,use_mpi=True,show_progress=False,backend='auto',output_dir='RISULTATI_MPI4',output_mode='dataframe',df_binary_format='pickle')"
+mpiexec -n 4 python -c "from pyche import GCEModel; m=GCEModel(); m.GCE(13700,3000.0,50.0,0.3,0.0,10000,10000,use_mpi=True,show_progress=False,backend='auto',output_dir='RISULTATI_MPI4',output_mode='dataframe',df_binary_format='pickle')"
 ```
 
 ### 4.2 MPI + Cython from shell
 
 ```bash
 python setup.py build_ext --inplace
-mpiexec -n 4 python -c "from pyche import GCEModel; m=GCEModel(); m.MinGCE(13700,3000.0,50.0,0.3,0.0,10000,10000,use_mpi=True,show_progress=False,backend='cython',output_dir='RISULTATI_MPI4_CY',output_mode='dataframe',df_binary_format='pickle')"
+mpiexec -n 4 python -c "from pyche import GCEModel; m=GCEModel(); m.GCE(13700,3000.0,50.0,0.3,0.0,10000,10000,use_mpi=True,show_progress=False,backend='cython',output_dir='RISULTATI_MPI4_CY',output_mode='dataframe',df_binary_format='pickle')"
 ```
 
 ### 4.3 MPI directly from notebook and return results as variables
@@ -108,7 +108,7 @@ Use `mpi_subprocess=True`:
 from pyche import GCEModel
 
 m = GCEModel()
-res = m.MinGCE(
+res = m.GCE(
     endoftime=13700,
     sigmat=3000.0,
     sigmah=50.0,
@@ -154,7 +154,7 @@ from pyche import GCEModel, read_outputs
 
 out_dir = "RISULTATI_PYCHE"
 m = GCEModel()
-m.MinGCE(
+m.GCE(
     endoftime=13700,
     sigmat=3000.0,
     sigmah=50.0,
@@ -208,7 +208,7 @@ For full plotting code from `res.mod` and `res.fis` (SFR/Zeta, mass budget, [Fe/
 You can compare a no-approx baseline to optimized settings:
 
 ```python
-res_noapprox = m.MinGCE(
+res_noapprox = m.GCE(
     endoftime=13700,
     sigmat=3000.0,
     sigmah=50.0,

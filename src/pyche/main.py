@@ -1,4 +1,4 @@
-"""Main MinGCE routine translated from ``src/main.f90``."""
+"""Main GCE routine translated from ``src/main.f90``."""
 
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ except Exception:  # pragma: no cover - optional dependency
 
 
 @dataclass
-class MinGCEResult:
+class GCEResult:
     mod: np.ndarray
     fis: np.ndarray
     mod_columns: tuple[str, ...] = tuple(MOD_COLUMNS)
@@ -58,7 +58,7 @@ class GCEModel:
         comm = MPI.COMM_WORLD
         return comm, int(comm.Get_rank()), int(comm.Get_size())
 
-    def _run_mpi_subprocess(self, mpi_subprocess_ranks: int, kwargs: dict[str, object]) -> MinGCEResult:
+    def _run_mpi_subprocess(self, mpi_subprocess_ranks: int, kwargs: dict[str, object]) -> GCEResult:
         if mpi_subprocess_ranks < 2:
             raise ValueError("mpi_subprocess_ranks must be >= 2")
         payload = base64.b64encode(json.dumps(kwargs).encode("utf-8")).decode("ascii")
@@ -87,10 +87,23 @@ class GCEModel:
         env["PYCHE_PROGRESS_PATH"] = progress_path
         # Force single-line progress updates for mpi_subprocess.
         progress_use_carriage = True
+        display_handle = None
+        display_fn = None
+        display_handle_cls = None
+        use_ipy_display = False
+        try:
+            if "ipykernel" in sys.modules:
+                from IPython.display import DisplayHandle, display  # type: ignore
+
+                use_ipy_display = True
+                display_fn = display
+                display_handle_cls = DisplayHandle
+        except Exception:
+            use_ipy_display = False
         last_pct = -1
 
         def _print_parent_progress(step: int) -> None:
-            nonlocal last_pct
+            nonlocal last_pct, display_handle
             if not show_progress or endoftime <= 0:
                 return
             step = max(0, min(int(step), endoftime))
@@ -102,7 +115,16 @@ class GCEModel:
             fill = int(bar_w * step / endoftime)
             bar = "#" * fill + "-" * (bar_w - fill)
             msg = f"Progress [{bar}] {100.0 * step / endoftime:6.2f}% ({step}/{endoftime})"
-            if progress_use_carriage:
+            if use_ipy_display:
+                if display_handle is None:
+                    if display_handle_cls is not None:
+                        display_handle = display_handle_cls()
+                        display_handle.display(msg)
+                    elif display_fn is not None:
+                        display_fn(msg)
+                else:
+                    display_handle.update(msg)
+            elif progress_use_carriage:
                 sys.stdout.write(f"\r{msg}")
                 sys.stdout.flush()
             else:
@@ -124,15 +146,15 @@ class GCEModel:
                     pass
                 time.sleep(0.25)
             if show_progress and endoftime > 0:
-                last_pct = -1
-                _print_parent_progress(endoftime)
+                if last_pct < 100:
+                    _print_parent_progress(endoftime)
                 sys.stdout.write("\n")
                 sys.stdout.flush()
             if not os.path.exists(result_path):
                 raise RuntimeError("MPI subprocess did not produce a result payload")
             with open(result_path, "rb") as f:
                 obj = pickle.load(f)
-            if not isinstance(obj, MinGCEResult):
+            if not isinstance(obj, GCEResult):
                 raise RuntimeError("MPI subprocess returned invalid result payload")
             return obj
         finally:
@@ -145,7 +167,7 @@ class GCEModel:
             except OSError:
                 pass
 
-    def MinGCE(
+    def GCE(
         self,
         endoftime: int,
         sigmat: float,
@@ -196,7 +218,7 @@ class GCEModel:
         return_results: bool = False,
         mpi_subprocess: bool = False,
         mpi_subprocess_ranks: int = 0,
-    ) -> MinGCEResult | None:
+    ) -> GCEResult | None:
         comm0, rank0, size0 = self._mpi_ctx()
         if mpi_subprocess and use_mpi and size0 == 1:
             call_kwargs: dict[str, object] = {
@@ -337,5 +359,5 @@ class GCEModel:
         if return_results:
             if payload is None:
                 return None
-            return MinGCEResult(mod=payload["mod_rows"], fis=payload["fis_rows"])
+            return GCEResult(mod=payload["mod_rows"], fis=payload["fis_rows"])
         return None

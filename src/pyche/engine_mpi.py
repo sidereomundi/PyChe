@@ -1,4 +1,4 @@
-"""MPI frontend for MinGCE engine execution."""
+"""MPI frontend for GCE engine execution."""
 
 from __future__ import annotations
 

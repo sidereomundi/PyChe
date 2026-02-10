@@ -1,4 +1,4 @@
-"""Readers for legacy/dataframe MinGCE outputs."""
+"""Readers for legacy/dataframe GCE outputs."""
 
 from __future__ import annotations
 

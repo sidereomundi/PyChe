@@ -1,4 +1,4 @@
-"""Shared MinGCE runtime loop used by serial and MPI engine frontends."""
+"""Shared GCE runtime loop used by serial and MPI engine frontends."""
 
 from __future__ import annotations
 
@@ -455,7 +455,7 @@ def run_mingce_loop(
             stage_sec["output"] += perf_counter() - out_t0
         else:
             stage_sec["output"] += perf_counter() - out_t0
-        print("MinGCE full translation run complete")
+        print("GCE full translation run complete")
         if mpi_active:
             print("MPI ranks:", size)
         ninput = model.tables.ninputyield if getattr(model, "tables", None) is not None else model.state.ninputyield

@@ -1,4 +1,4 @@
-"""Run configuration for MinGCE simulations."""
+"""Run configuration for GCE simulations."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class RunConfig:
-    """Container for user-controlled MinGCE runtime parameters."""
+    """Container for user-controlled GCE runtime parameters."""
 
     endoftime: int
     sigmat: float

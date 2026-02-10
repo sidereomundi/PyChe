@@ -1,4 +1,4 @@
-"""Helpers for running and summarizing MinGCE outputs."""
+"""Helpers for running and summarizing GCE outputs."""
 
 from __future__ import annotations
 

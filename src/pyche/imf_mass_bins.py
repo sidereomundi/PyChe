@@ -1,4 +1,4 @@
-"""IMF setup and mass-bin construction extracted from MinGCE main module."""
+"""IMF setup and mass-bin construction extracted from GCE main module."""
 
 from __future__ import annotations
 
@@ -56,7 +56,7 @@ def _multi_salpeter(params: IMFParams, mmax: float, mmin: float) -> float:
 
 
 def build_mass_bins(imf: int, tautype: int) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, float, int]:
-    """Build mass bins and lifetimes exactly as in translated MinGCE."""
+    """Build mass bins and lifetimes exactly as in translated GCE."""
     amu_vals = np.loadtxt(DATA_DIR / "DATI" / "amu.dat").flatten()
     amu = np.zeros(116, dtype=float)
     amu[1:116] = amu_vals[:115]

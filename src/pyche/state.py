@@ -1,4 +1,4 @@
-"""Runtime simulation state for MinGCE."""
+"""Runtime simulation state for GCE."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ import numpy as np
 
 @dataclass
 class SimulationState:
-    """Mutable arrays evolved during a single MinGCE run."""
+    """Mutable arrays evolved during a single GCE run."""
 
     allv: np.ndarray
     gas: np.ndarray

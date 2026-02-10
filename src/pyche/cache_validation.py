@@ -87,8 +87,8 @@ def validate_cache_stride(
         spalla_lut=True,
     )
 
-    ref = GCEModel().MinGCE(**base, interp_cache_guard_stride=1)
-    test = GCEModel().MinGCE(**base, interp_cache_guard_stride=stride_test)
+    ref = GCEModel().GCE(**base, interp_cache_guard_stride=1)
+    test = GCEModel().GCE(**base, interp_cache_guard_stride=stride_test)
     feh_ref, ofe_ref = _abundance_series(ref)
     feh_test, ofe_test = _abundance_series(test)
 

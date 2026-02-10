@@ -1,4 +1,4 @@
-"""Fortran-style IO translation for MinGCE tables.
+"""Fortran-style IO translation for GCE tables.
 
 This module translates the file-loading routines from ``src/io.f90`` and the
 main table-loading block in ``src/main.f90``.  Array shapes keep a leading
@@ -23,7 +23,7 @@ TABLE_CACHE_VERSION = 1
 
 @dataclass
 class FortranState:
-    """Container mirroring the Fortran COMMON blocks used by MinGCE."""
+    """Container mirroring the Fortran COMMON blocks used by GCE."""
 
     ninputyield: int = 0
     Q: np.ndarray = field(default_factory=lambda: np.zeros(34, dtype=float))
