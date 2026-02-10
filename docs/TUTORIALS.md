@@ -240,7 +240,44 @@ res_noapprox = m.GCE(
 
 Then compare tracks and MDF in `examples/diagnostic_plots.ipynb`.
 
-## 8) Recommended speed workflow
+## 8) Custom infall input (this branch)
+
+On branch `feature/sfr-input-array`, you can provide infall directly as a time series:
+
+- `infall_time`: strictly increasing time grid (Myr), can be non-integer
+- `infall_values`: infall values on that grid
+
+When these arrays are provided:
+- parametric infall (`sigmat`, `sigmah`, `delay`) is bypassed
+- `endoftime` is derived from `infall_time[-1]`
+- SFR is still computed by the original gas-surface-density law
+
+Example:
+
+```python
+import numpy as np
+from pyche import GCEModel
+
+m = GCEModel()
+res = m.GCE(
+    endoftime=1,  # ignored when infall arrays are provided
+    sigmat=3000.0,
+    sigmah=50.0,
+    psfr=0.3,
+    pwind=0.0,
+    delay=10000,
+    time_wind=10000,
+    infall_time=np.array([0.0, 100.5, 500.0, 13700.0]),
+    infall_values=np.array([1.0, 0.8, 0.3, 0.1]),
+    use_mpi=False,
+    show_progress=False,
+    write_output=False,
+    return_results=True,
+)
+print(res.mod.shape, res.fis.shape)
+```
+
+## 9) Recommended speed workflow
 
 1. Build Cython:
    - `python setup.py build_ext --inplace`
@@ -250,7 +287,7 @@ Then compare tracks and MDF in `examples/diagnostic_plots.ipynb`.
 4. Use MPI shell mode for clean speed tests.
 5. Use `profile_timing=True` to inspect `interp`, `wind`, `mpi_reduce`.
 
-## 9) Cache validation tool
+## 10) Cache validation tool
 
 Validate cache stride behavior:
 
