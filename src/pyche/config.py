@@ -40,7 +40,7 @@ class RunConfig:
     spalla_lut_logq_max: float = 2.0
     spalla_lut_logd_min: float = -30.0
     spalla_lut_logd_max: float = 2.0
-    interp_cache: bool = True
+    interp_cache: bool = False
     interp_cache_mass_points: int = 96
     interp_cache_zeta_points: int = 64
     interp_cache_binmax_points: int = 64
@@ -48,6 +48,7 @@ class RunConfig:
     interp_cache_guard: bool = True
     interp_cache_guard_tol: float = 0.05
     interp_cache_guard_stride: int = 16
+    interp_cache_guard_samples: int = 5
     profile_timing: bool = True
 
     def __post_init__(self) -> None:
@@ -99,3 +100,5 @@ class RunConfig:
             raise ValueError("interp_cache_guard_tol must be > 0")
         if self.interp_cache_guard_stride < 1:
             raise ValueError("interp_cache_guard_stride must be >= 1")
+        if self.interp_cache_guard_samples < 1:
+            raise ValueError("interp_cache_guard_samples must be >= 1")

@@ -85,7 +85,7 @@ class GCEModel:
         spalla_lut_logq_max: float = 2.0,
         spalla_lut_logd_min: float = -30.0,
         spalla_lut_logd_max: float = 2.0,
-        interp_cache: bool = True,
+        interp_cache: bool = False,
         interp_cache_mass_points: int = 96,
         interp_cache_zeta_points: int = 64,
         interp_cache_binmax_points: int = 64,
@@ -93,6 +93,7 @@ class GCEModel:
         interp_cache_guard: bool = True,
         interp_cache_guard_tol: float = 0.05,
         interp_cache_guard_stride: int = 16,
+        interp_cache_guard_samples: int = 5,
         profile_timing: bool = True,
         return_results: bool = False,
     ) -> MinGCEResult | None:
@@ -137,6 +138,7 @@ class GCEModel:
             interp_cache_guard=interp_cache_guard,
             interp_cache_guard_tol=interp_cache_guard_tol,
             interp_cache_guard_stride=interp_cache_guard_stride,
+            interp_cache_guard_samples=interp_cache_guard_samples,
             profile_timing=profile_timing,
         )
 

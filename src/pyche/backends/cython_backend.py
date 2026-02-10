@@ -41,6 +41,7 @@ class CythonModelInterpolator:
     enable_cache_guard: bool = False
     cache_guard_tol: float = 0.05
     cache_guard_stride: int = 32
+    cache_guard_samples: int = 5
 
     def __post_init__(self) -> None:
         self._compat = CythonCompatInterpolator(self.tables)
@@ -224,30 +225,50 @@ class CythonModelInterpolator:
             idxs = np.asarray(indices, dtype=np.int32)
             if idxs.size == 0:
                 return True
-            jj = int(idxs[idxs.size // 2])
+            n_samples = max(1, int(self.cache_guard_samples))
+            pos = np.linspace(0, idxs.size - 1, num=min(n_samples, idxs.size), dtype=np.int32)
+            sample_bins = idxs[np.unique(pos)]
             zt = float(zeta_t)
-            out_cached = _cyinterp.interp_from_cache(
-                float(mstars[jj]),
-                zt,
-                float(binmax[jj]),
-                self._zeta_grid,
-                self._mass_grid,
-                self._binmax_grid,
-                self._cache_zero_q,
-                self._cache_zero_h,
-                self._cache_pos_q_base,
-                self._cache_pos_h_base,
-                self._qia_vec,
-                float(self._qia_sum),
-            )
-            if not bool(out_cached[2]):
-                return True
-            q_exact, h_exact = self._interp_exact(float(mstars[jj]), zt, float(binmax[jj]))
-            q_cached = np.asarray(out_cached[0], dtype=np.float64)
-            h_cached = float(out_cached[1])
-            rel_q = float(np.max(np.abs(q_cached[: elem - 1] - q_exact[: elem - 1]) / np.maximum(np.abs(q_exact[: elem - 1]), 1.0e-20)))
-            rel_h = abs(h_cached - float(h_exact)) / max(abs(float(h_exact)), 1.0e-20)
-            return max(rel_q, rel_h) <= float(self.cache_guard_tol)
+            tol = float(self.cache_guard_tol)
+            key_tol = min(tol, 0.02)
+            # O16, Mg, Fe in q/qqn indexing
+            key_idx = np.array([3, 7, 9], dtype=np.int32)
+
+            for jj in sample_bins:
+                out_cached = _cyinterp.interp_from_cache(
+                    float(mstars[int(jj)]),
+                    zt,
+                    float(binmax[int(jj)]),
+                    self._zeta_grid,
+                    self._mass_grid,
+                    self._binmax_grid,
+                    self._cache_zero_q,
+                    self._cache_zero_h,
+                    self._cache_pos_q_base,
+                    self._cache_pos_h_base,
+                    self._qia_vec,
+                    float(self._qia_sum),
+                )
+                if not bool(out_cached[2]):
+                    continue
+                q_exact, h_exact = self._interp_exact(float(mstars[int(jj)]), zt, float(binmax[int(jj)]))
+                q_cached = np.asarray(out_cached[0], dtype=np.float64)
+                h_cached = float(out_cached[1])
+
+                rel_q = float(
+                    np.max(
+                        np.abs(q_cached[: elem - 1] - q_exact[: elem - 1])
+                        / np.maximum(np.abs(q_exact[: elem - 1]), 1.0e-20)
+                    )
+                )
+                kidx = key_idx[key_idx < (elem - 1)]
+                rel_key = float(
+                    np.max(np.abs(q_cached[kidx] - q_exact[kidx]) / np.maximum(np.abs(q_exact[kidx]), 1.0e-20))
+                ) if kidx.size > 0 else 0.0
+                rel_h = abs(h_cached - float(h_exact)) / max(abs(float(h_exact)), 1.0e-20)
+                if (rel_q > tol) or (rel_key > key_tol) or (rel_h > tol):
+                    return False
+            return True
 
         if _cyinterp is None:
             oldstars_contrib = 0.0
@@ -368,4 +389,5 @@ def build_cython_backend(tables: ModelTables, cfg: RunConfig | None = None):
         enable_cache_guard=bool(cfg.interp_cache_guard),
         cache_guard_tol=float(cfg.interp_cache_guard_tol),
         cache_guard_stride=int(cfg.interp_cache_guard_stride),
+        cache_guard_samples=int(cfg.interp_cache_guard_samples),
     )
