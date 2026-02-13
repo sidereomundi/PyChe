@@ -11,6 +11,24 @@ from typing import Any
 import numpy as np
 
 from .config import RunConfig
+from .constants import (
+    FE,
+    GALACTIC_AGE,
+    GAS_FLOOR,
+    HEN,
+    KAPPA,
+    LI,
+    PRIMORDIAL_H,
+    PRIMORDIAL_HE4,
+    R_GALACTIC,
+    REMN,
+    SF_THRESHOLD,
+    SIGMA_SUN,
+    SPALLA_FEH_OFFSET,
+    SPALLA_LOG_CONST,
+    SPALLA_SLOPE,
+    SUPERF,
+)
 from .output_io import build_fis_rows, build_mod_rows, write_outputs
 from .state import SimulationState
 
@@ -18,6 +36,136 @@ try:
     from . import _cyengine  # type: ignore
 except Exception:  # pragma: no cover - optional compiled extension
     _cyengine = None
+
+
+def _compute_static_infall(
+    cfg: RunConfig,
+    allv: np.ndarray,
+    input_time_arr: np.ndarray | None,
+    infall_values_arr: np.ndarray | None,
+) -> None:
+    """Pre-compute cumulative infall profile into *allv*."""
+    if cfg.endoftime <= 0:
+        return
+    tt = np.arange(1, cfg.endoftime + 1, dtype=float)
+    if input_time_arr is not None and infall_values_arr is not None:
+        infall = np.interp(tt, input_time_arr, infall_values_arr)
+        allv[1 : cfg.endoftime + 1] = np.cumsum(infall, dtype=float)
+    elif cfg.sigmat != 0.0:
+        coeff = cfg.sigmah * SUPERF / (2.5 * cfg.sigmat)
+        infall = coeff * np.exp(-((tt - cfg.delay) ** 2) / (2.0 * cfg.sigmat**2))
+        allv[1 : cfg.endoftime + 1] = np.cumsum(infall, dtype=float)
+    else:
+        allv[1 : cfg.endoftime + 1] = allv[0]
+
+
+def _compute_sfr(
+    cfg: RunConfig,
+    gas_t: float,
+    psfr_eff: float,
+) -> float:
+    """Star formation rate at the current timestep."""
+    if gas_t / SUPERF > SF_THRESHOLD and cfg.sigmah != 0.0:
+        return (
+            psfr_eff
+            * (gas_t / (SUPERF * cfg.sigmah)) ** KAPPA
+            * (cfg.sigmah / SIGMA_SUN) ** (KAPPA - 1.0)
+            * (8.0 / R_GALACTIC)
+            * (SUPERF / 1000.0)
+            * cfg.sigmah
+        )
+    return 0.0
+
+
+def _wind_chemistry_step(
+    t: int,
+    cfg: RunConfig,
+    dt_scale: int,
+    sfr: float,
+    windist: float,
+    wind_scale: float,
+    elem: int,
+    wind_idx: np.ndarray,
+    zeta_idx: np.ndarray,
+    gas: np.ndarray,
+    allv: np.ndarray,
+    ini: np.ndarray,
+    winds: np.ndarray,
+    qqn: np.ndarray,
+    wind: np.ndarray,
+    zeta: np.ndarray,
+    spalla: np.ndarray,
+) -> None:
+    """Wind processing + metallicity + spallation (pure-Python path)."""
+    t3 = t
+    while True:
+        if windist != 0.0:
+            wind[t3] += windist
+        if wind_scale != 0.0:
+            qqn[wind_idx, t3] = qqn[wind_idx, t3] - qqn[wind_idx, t] * winds[wind_idx] * wind_scale
+            np.maximum(qqn[wind_idx, t3], GAS_FLOOR, out=qqn[wind_idx, t3])
+
+        zeta[t3] = (
+            float(np.sum(qqn[zeta_idx, t3])) / gas[t3] if (sfr > 0.0 and gas[t3] > 0.0) else GAS_FLOOR
+        )
+
+        qqn[elem, t3] = gas[t3] * PRIMORDIAL_HE4 + qqn[HEN, t3]
+        qqn[elem - 1, t3] = gas[t3] * (PRIMORDIAL_H - zeta[t3]) - qqn[HEN, t3]
+
+        if t > 1:
+            qqn[LI, t3] = qqn[LI, t3] + (allv[t] - allv[max(0, t - dt_scale)]) * ini[LI]
+            denom = max(qqn[elem - 1, t3], 1.0e-30)
+            feh = np.log10(max(qqn[FE, t3] / denom, 1.0e-30))
+            spalla[t3] = 10 ** (SPALLA_LOG_CONST + SPALLA_SLOPE * (feh - (-SPALLA_FEH_OFFSET)) + np.log10(denom))
+            qqn[LI, t3] = qqn[LI, t3] + spalla[t3] - spalla[t3 - 1]
+        else:
+            qqn[LI, t3] = qqn[LI, t3] + allv[t] * ini[LI]
+
+        if t3 >= cfg.endoftime:
+            break
+        t3 += 1
+
+
+def _adapt_timestep(
+    cfg: RunConfig,
+    t: int,
+    t_prev: int,
+    gas: np.ndarray,
+    zeta: np.ndarray,
+    sfr: float,
+    rel_ema: float,
+    rel_ema_init: bool,
+    stable_steps: int,
+) -> tuple[int, float, bool, int]:
+    """Adaptive timestep calculation. Returns (next_dt, rel_ema, rel_ema_init, stable_steps)."""
+    dg = abs(gas[t] - gas[t_prev]) / max(abs(gas[t_prev]), 1.0)
+    dz = abs(zeta[t] - zeta[t_prev]) / max(abs(zeta[t_prev]), GAS_FLOOR)
+    rel = max(dg, dz)
+    if not rel_ema_init:
+        rel_ema = rel
+        rel_ema_init = True
+    else:
+        rel_ema = (1.0 - cfg.dt_smooth_alpha) * rel_ema + cfg.dt_smooth_alpha * rel
+    if sfr <= 0.0 and gas[t] / SUPERF < SF_THRESHOLD * 1.05:
+        return cfg.dt_max, rel_ema, rel_ema_init, 0
+    if rel_ema <= 0.0:
+        return cfg.dt_max, rel_ema, rel_ema_init, 0
+    proposed = int(np.clip(cfg.dt_rel_tol / max(rel_ema, 1.0e-12), cfg.dt_min, cfg.dt_max))
+    if rel > cfg.dt_rel_tol * 1.5:
+        proposed = max(cfg.dt_min, int(max(1, np.floor(proposed * cfg.dt_shrink_factor))))
+        stable_steps = 0
+    else:
+        if rel_ema < cfg.dt_rel_tol * 0.4:
+            stable_steps += 1
+        else:
+            stable_steps = 0
+        if stable_steps >= 3:
+            grown = int(np.ceil(max(1.0, proposed) * cfg.dt_growth_factor))
+            proposed = min(cfg.dt_max, max(proposed, grown))
+            stable_steps = 0
+    if zeta[t] < cfg.dt_force_small_below_zeta:
+        proposed = min(proposed, cfg.dt_force_small_value)
+    return proposed, rel_ema, rel_ema_init, stable_steps
 
 
 def run_mingce_loop(
@@ -53,17 +201,11 @@ def run_mingce_loop(
     ini = runtime.ini
     winds = runtime.winds
 
-    superf = 20000.0
-    threshold = 0.1
-    sigmasun = 50.0
-    kappa = 1.5
-    rm = 8.0
-
     out_dir = Path(cfg.output_dir) if cfg.output_dir is not None else (Path.cwd() / "RISULTATI2")
 
-    elem_idx_no14 = np.array([i for i in range(1, elem) if i != 14], dtype=int)
-    wind_idx = np.array([i for i in range(1, 32) if i != 14], dtype=int)
-    zeta_idx = np.array([i for i in range(2, elem - 1) if i != 14], dtype=int)
+    elem_idx_no14 = np.array([i for i in range(1, elem) if i != REMN], dtype=int)
+    wind_idx = np.array([i for i in range(1, 32) if i != REMN], dtype=int)
+    zeta_idx = np.array([i for i in range(2, elem - 1) if i != REMN], dtype=int)
     t = 0
     last_progress_step = 0
     progress_stride = max(1, cfg.endoftime // 200) if cfg.endoftime > 0 else 1
@@ -75,7 +217,6 @@ def run_mingce_loop(
     progress_use_carriage = style == "single"
     progress_path = os.getenv("PYCHE_PROGRESS_PATH", "").strip() if rank == 0 else ""
     last_progress_bucket = -1
-    gas_floor = 1.0e-20
     stage_sec = {"interp": 0.0, "mpi_reduce": 0.0, "death": 0.0, "wind": 0.0, "output": 0.0}
     total_t0 = perf_counter()
     rel_ema = 0.0
@@ -96,18 +237,7 @@ def run_mingce_loop(
     if cfg.rhosfr_values is not None:
         rhosfr_values_arr = np.asarray(cfg.rhosfr_values, dtype=float)
 
-    # Static infall profile: either parameterized (original model) or user-provided infall(t).
-    if cfg.endoftime > 0:
-        tt = np.arange(1, cfg.endoftime + 1, dtype=float)
-        if input_time_arr is not None and infall_values_arr is not None:
-            infall = np.interp(tt, input_time_arr, infall_values_arr)
-            allv[1 : cfg.endoftime + 1] = np.cumsum(infall, dtype=float)
-        elif cfg.sigmat != 0.0:
-            coeff = cfg.sigmah * superf / (2.5 * cfg.sigmat)
-            infall = coeff * np.exp(-((tt - cfg.delay) ** 2) / (2.0 * cfg.sigmat**2))
-            allv[1 : cfg.endoftime + 1] = np.cumsum(infall, dtype=float)
-        else:
-            allv[1 : cfg.endoftime + 1] = allv[0]
+    _compute_static_infall(cfg, allv, input_time_arr, infall_values_arr)
 
     # Reuse these buffers every timestep to avoid heavy allocator churn.
     hecores = np.zeros(ss2 + 2, dtype=float)
@@ -126,7 +256,7 @@ def run_mingce_loop(
         lut_logd = np.linspace(cfg.spalla_lut_logd_min, cfg.spalla_lut_logd_max, cfg.spalla_lut_d_points, dtype=float)
         logq_grid = lut_logq[:, None]
         logd_grid = lut_logd[None, :]
-        spalla_lut = np.power(10.0, -9.50 + 1.24 * (logq_grid - logd_grid + 2.75) + logd_grid).astype(float, copy=False)
+        spalla_lut = np.power(10.0, SPALLA_LOG_CONST + SPALLA_SLOPE * (logq_grid - logd_grid + SPALLA_FEH_OFFSET) + logd_grid).astype(float, copy=False)
     else:
         spalla_lut = np.empty((0, 0), dtype=float)
     mpi_reduce_buf = None
@@ -194,23 +324,13 @@ def run_mingce_loop(
         psfr_eff = cfg.psfr
         if input_time_arr is not None and rhosfr_values_arr is not None:
             psfr_eff = float(np.interp(float(t), input_time_arr, rhosfr_values_arr))
-        if gas[t] / superf > threshold and cfg.sigmah != 0.0:
-            sfr = (
-                psfr_eff
-                * (gas[t] / (superf * cfg.sigmah)) ** kappa
-                * (cfg.sigmah / sigmasun) ** (kappa - 1.0)
-                * (8.0 / rm)
-                * (superf / 1000.0)
-                * cfg.sigmah
-            )
-        else:
-            sfr = 0.0
+        sfr = _compute_sfr(cfg, float(gas[t]), psfr_eff)
         sfr_hist[t] = sfr
         if dt_scale > 1:
             sfr_hist[t_prev + 1 : t] = sfr
         sfr_mass = sfr * float(dt_scale)
 
-        if gas[t] / superf >= threshold:
+        if gas[t] / SUPERF >= SF_THRESHOLD:
             interp_t0 = perf_counter()
             hecores.fill(0.0)
             qispecial.fill(0.0)
@@ -235,7 +355,7 @@ def run_mingce_loop(
                 )
             else:
                 for jj in local_bins:
-                    if tdead[jj] + t > 13500.0:
+                    if tdead[jj] + t > GALACTIC_AGE:
                         oldstars_contrib += multi1[jj] * sfr_mass
 
                     q, hecore = interp(mstars[jj], zeta[t], binmax[jj])
@@ -262,6 +382,7 @@ def run_mingce_loop(
             else:
                 oldstars[t] += oldstars_contrib
 
+            # Death/enrichment block (hot path -- stays inline; Cython counterpart exists).
             t3 = t
             starstot = sfr_mass * norm
             difftot = sfr_mass * norm
@@ -308,8 +429,8 @@ def run_mingce_loop(
                         qqn[elem_idx_no14, t3] = (
                             qqn[elem_idx_no14, t3] + qacc[elem_idx_no14] - qqn[elem_idx_no14, t] * difftot / gas[t]
                         )
-                        qqn[31, t3] = (
-                            qqn[31, t3] - qqn[31, t] * (mstars1_eff[jj] + hecores[jj]) * multi1[jj] * sfr_mass / gas[t]
+                        qqn[LI, t3] = (
+                            qqn[LI, t3] - qqn[LI, t] * (mstars1_eff[jj] + hecores[jj]) * multi1[jj] * sfr_mass / gas[t]
                         )
 
                     if died_now:
@@ -319,7 +440,7 @@ def run_mingce_loop(
                                 break
                             continue
                         stars[t3] += starstot
-                        q14 = qacc[14]
+                        q14 = qacc[REMN]
                         remn[t3] += q14
                         if q14 < 0.0:
                             break
@@ -332,7 +453,7 @@ def run_mingce_loop(
                             break
                     else:
                         stars[t3] += starstot
-                        q14 = qacc[14]
+                        q14 = qacc[REMN]
                         remn[t3] += q14
                         if q14 < 0.0:
                             break
@@ -356,7 +477,7 @@ def run_mingce_loop(
                     elem,
                     dt_scale,
                     float(sfr),
-                    gas_floor,
+                    GAS_FLOOR,
                     float(windist),
                     float(wind_scale),
                     gas,
@@ -382,7 +503,7 @@ def run_mingce_loop(
                     elem,
                     dt_scale,
                     float(sfr),
-                    gas_floor,
+                    GAS_FLOOR,
                     float(windist),
                     float(wind_scale),
                     gas,
@@ -403,69 +524,19 @@ def run_mingce_loop(
                     float(cfg.spalla_lut_logd_max),
                 )
         else:
-            while True:
-                if windist != 0.0:
-                    wind[t3] += windist
-                if wind_scale != 0.0:
-                    qqn[wind_idx, t3] = qqn[wind_idx, t3] - qqn[wind_idx, t] * winds[wind_idx] * wind_scale
-                    np.maximum(qqn[wind_idx, t3], gas_floor, out=qqn[wind_idx, t3])
-
-                zeta[t3] = (
-                    float(np.sum(qqn[zeta_idx, t3])) / gas[t3] if (sfr > 0.0 and gas[t3] > 0.0) else gas_floor
-                )
-
-                qqn[elem, t3] = gas[t3] * 0.241 + qqn[1, t3]
-                qqn[elem - 1, t3] = gas[t3] * (0.759 - zeta[t3]) - qqn[1, t3]
-
-                if t > 1:
-                    qqn[31, t3] = qqn[31, t3] + (allv[t] - allv[max(0, t - dt_scale)]) * ini[31]
-                    denom = max(qqn[elem - 1, t3], 1.0e-30)
-                    feh = np.log10(max(qqn[9, t3] / denom, 1.0e-30))
-                    spalla[t3] = 10 ** (-9.50 + 1.24 * (feh - (-2.75)) + np.log10(denom))
-                    qqn[31, t3] = qqn[31, t3] + spalla[t3] - spalla[t3 - 1]
-                else:
-                    qqn[31, t3] = qqn[31, t3] + allv[t] * ini[31]
-
-                if t3 >= cfg.endoftime:
-                    break
-                t3 += 1
+            _wind_chemistry_step(
+                t, cfg, dt_scale, sfr, windist, wind_scale, elem,
+                wind_idx, zeta_idx, gas, allv, ini, winds, qqn, wind, zeta, spalla,
+            )
         stage_sec["wind"] += perf_counter() - wind_t0
 
         if t - last_progress_step >= progress_stride:
             _print_progress(t)
             last_progress_step = t
         if cfg.adaptive_timestep and t < cfg.endoftime:
-            dg = abs(gas[t] - gas[t_prev]) / max(abs(gas[t_prev]), 1.0)
-            dz = abs(zeta[t] - zeta[t_prev]) / max(abs(zeta[t_prev]), gas_floor)
-            rel = max(dg, dz)
-            if not rel_ema_init:
-                rel_ema = rel
-                rel_ema_init = True
-            else:
-                rel_ema = (1.0 - cfg.dt_smooth_alpha) * rel_ema + cfg.dt_smooth_alpha * rel
-            if sfr <= 0.0 and gas[t] / superf < threshold * 1.05:
-                next_dt = cfg.dt_max
-                stable_steps = 0
-            elif rel_ema <= 0.0:
-                next_dt = cfg.dt_max
-                stable_steps = 0
-            else:
-                proposed = int(np.clip(cfg.dt_rel_tol / max(rel_ema, 1.0e-12), cfg.dt_min, cfg.dt_max))
-                if rel > cfg.dt_rel_tol * 1.5:
-                    proposed = max(cfg.dt_min, int(max(1, np.floor(proposed * cfg.dt_shrink_factor))))
-                    stable_steps = 0
-                else:
-                    if rel_ema < cfg.dt_rel_tol * 0.4:
-                        stable_steps += 1
-                    else:
-                        stable_steps = 0
-                    if stable_steps >= 3:
-                        grown = int(np.ceil(max(1.0, proposed) * cfg.dt_growth_factor))
-                        proposed = min(cfg.dt_max, max(proposed, grown))
-                        stable_steps = 0
-                if zeta[t] < cfg.dt_force_small_below_zeta:
-                    proposed = min(proposed, cfg.dt_force_small_value)
-                next_dt = proposed
+            next_dt, rel_ema, rel_ema_init, stable_steps = _adapt_timestep(
+                cfg, t, t_prev, gas, zeta, sfr, rel_ema, rel_ema_init, stable_steps,
+            )
 
     if rank == 0:
         if cfg.show_progress and cfg.endoftime > 0:

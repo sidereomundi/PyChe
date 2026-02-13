@@ -66,32 +66,32 @@ FIS_COLUMNS = [
 
 def build_mod_rows(endoftime: int, allv: np.ndarray, gas: np.ndarray, stars: np.ndarray, sfr_hist: np.ndarray, oldstars: np.ndarray, qqn: np.ndarray) -> np.ndarray:
     rows = np.zeros((endoftime, len(MOD_COLUMNS)), dtype=float)
-    for t in range(1, endoftime + 1):
-        rows[t - 1, 0] = float(t)
-        rows[t - 1, 1] = allv[t]
-        rows[t - 1, 2] = gas[t]
-        rows[t - 1, 3] = stars[t]
-        rows[t - 1, 4] = sfr_hist[t]
-        rows[t - 1, 5] = oldstars[t]
-        rows[t - 1, 6:] = qqn[1:34, t]
+    s = slice(1, endoftime + 1)
+    rows[:, 0] = np.arange(1, endoftime + 1, dtype=float)
+    rows[:, 1] = allv[s]
+    rows[:, 2] = gas[s]
+    rows[:, 3] = stars[s]
+    rows[:, 4] = sfr_hist[s]
+    rows[:, 5] = oldstars[s]
+    rows[:, 6:] = qqn[1:34, s].T
     return rows
 
 
 def build_fis_rows(endoftime: int, allv: np.ndarray, gas: np.ndarray, stars: np.ndarray, remn: np.ndarray, hot: np.ndarray, zeta: np.ndarray, sfr_hist: np.ndarray, snianum: np.ndarray) -> np.ndarray:
     rows = np.zeros((endoftime, len(FIS_COLUMNS)), dtype=float)
-    for t in range(1, endoftime + 1):
-        rows[t - 1, 0] = float(t)
-        rows[t - 1, 1] = allv[t]
-        rows[t - 1, 2] = gas[t]
-        rows[t - 1, 3] = stars[t]
-        rows[t - 1, 4] = remn[t]
-        rows[t - 1, 5] = hot[t]
-        rows[t - 1, 6] = zeta[t]
-        rows[t - 1, 7] = sfr_hist[t]
-        rows[t - 1, 8] = 1.0
-        rows[t - 1, 9] = 20.0 * (stars[t] - stars[t - 1])
-        rows[t - 1, 10] = snianum[t]
-        rows[t - 1, 11] = snianum[t] - snianum[t - 1]
+    s = slice(1, endoftime + 1)
+    rows[:, 0] = np.arange(1, endoftime + 1, dtype=float)
+    rows[:, 1] = allv[s]
+    rows[:, 2] = gas[s]
+    rows[:, 3] = stars[s]
+    rows[:, 4] = remn[s]
+    rows[:, 5] = hot[s]
+    rows[:, 6] = zeta[s]
+    rows[:, 7] = sfr_hist[s]
+    rows[:, 8] = 1.0
+    rows[:, 9] = 20.0 * (stars[s] - stars[0:endoftime])
+    rows[:, 10] = snianum[s]
+    rows[:, 11] = snianum[s] - snianum[0:endoftime]
     return rows
 
 

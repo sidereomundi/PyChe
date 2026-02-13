@@ -194,8 +194,31 @@ class IORoutines:
         state.massac[1:14] = arr[:13, 0]
         state.W[1:15, 1:14, z] = arr[:13, 1:15].T
 
-    def leggi(self, state: FortranState) -> None:
-        arr = self._read_numeric_table(self.base_yieldsba / "CristalloBa2.dat", skiprows=1)
+    def _load_cristallo_yields(
+        self,
+        state: FortranState,
+        filename: str,
+        target_array: np.ndarray,
+        col_slice: slice,
+        sum_cols: bool,
+    ) -> None:
+        """Generic loader for Cristallo-format yield tables.
+
+        Parameters
+        ----------
+        state : FortranState
+            Receives massaba/zbario side-effects.
+        filename : str
+            File name relative to ``base_yieldsba``.
+        target_array : np.ndarray
+            2-D array (shape >= [6, 10]) to fill at [j, i].
+        col_slice : slice
+            Column slice applied to each row (e.g. ``slice(2, 9)``).
+        sum_cols : bool
+            If True, ``np.sum(row[col_slice])`` is stored.
+            If False, ``row[col_slice]`` is stored directly (must be scalar).
+        """
+        arr = self._read_numeric_table(self.base_yieldsba / filename, skiprows=1)
         idx = 0
         for j in range(1, 6):
             for i in range(1, 10):
@@ -203,73 +226,28 @@ class IORoutines:
                 idx += 1
                 state.massaba[j] = row[0]
                 state.zbario[i] = row[1]
-                state.ba[j, i] = float(np.sum(row[2:9]))
+                target_array[j, i] = float(np.sum(row[col_slice])) if sum_cols else row[col_slice.start]
+
+    def leggi(self, state: FortranState) -> None:
+        self._load_cristallo_yields(state, "CristalloBa2.dat", state.ba, slice(2, 9), sum_cols=True)
 
     def leggiSr(self, state: FortranState) -> None:
-        arr = self._read_numeric_table(self.base_yieldsba / "CristalloSr.dat", skiprows=1)
-        idx = 0
-        for j in range(1, 6):
-            for i in range(1, 10):
-                row = arr[idx]
-                idx += 1
-                state.massaba[j] = row[0]
-                state.zbario[i] = row[1]
-                state.sr[j, i] = float(np.sum(row[2:5]))
+        self._load_cristallo_yields(state, "CristalloSr.dat", state.sr, slice(2, 5), sum_cols=True)
 
     def leggiY(self, state: FortranState) -> None:
-        arr = self._read_numeric_table(self.base_yieldsba / "CristalloY.dat", skiprows=1)
-        idx = 0
-        for j in range(1, 6):
-            for i in range(1, 10):
-                row = arr[idx]
-                idx += 1
-                state.massaba[j] = row[0]
-                state.zbario[i] = row[1]
-                state.yt[j, i] = row[2]
+        self._load_cristallo_yields(state, "CristalloY.dat", state.yt, slice(2, 3), sum_cols=False)
 
     def leggiEu(self, state: FortranState) -> None:
-        arr = self._read_numeric_table(self.base_yieldsba / "CristalloEu.dat", skiprows=1)
-        idx = 0
-        for j in range(1, 6):
-            for i in range(1, 10):
-                row = arr[idx]
-                idx += 1
-                state.massaba[j] = row[0]
-                state.zbario[i] = row[1]
-                state.eu[j, i] = float(np.sum(row[2:9]))
+        self._load_cristallo_yields(state, "CristalloEu.dat", state.eu, slice(2, 9), sum_cols=True)
 
     def leggiZr(self, state: FortranState) -> None:
-        arr = self._read_numeric_table(self.base_yieldsba / "CristalloZr.dat", skiprows=1)
-        idx = 0
-        for j in range(1, 6):
-            for i in range(1, 10):
-                row = arr[idx]
-                idx += 1
-                state.massaba[j] = row[0]
-                state.zbario[i] = row[1]
-                state.zr[j, i] = float(np.sum(row[2:10]))
+        self._load_cristallo_yields(state, "CristalloZr.dat", state.zr, slice(2, 10), sum_cols=True)
 
     def leggiLa(self, state: FortranState) -> None:
-        arr = self._read_numeric_table(self.base_yieldsba / "CristalloLa.dat", skiprows=1)
-        idx = 0
-        for j in range(1, 6):
-            for i in range(1, 10):
-                row = arr[idx]
-                idx += 1
-                state.massaba[j] = row[0]
-                state.zbario[i] = row[1]
-                state.la[j, i] = row[2]
+        self._load_cristallo_yields(state, "CristalloLa.dat", state.la, slice(2, 3), sum_cols=False)
 
     def leggiRb(self, state: FortranState) -> None:
-        arr = self._read_numeric_table(self.base_yieldsba / "CristalloRb.dat", skiprows=1)
-        idx = 0
-        for j in range(1, 6):
-            for i in range(1, 10):
-                row = arr[idx]
-                idx += 1
-                state.massaba[j] = row[0]
-                state.zbario[i] = row[1]
-                state.rb[j, i] = float(np.sum(row[2:6]))
+        self._load_cristallo_yields(state, "CristalloRb.dat", state.rb, slice(2, 6), sum_cols=True)
 
     def leggiLi(self, state: FortranState) -> None:
         arr = self._read_numeric_table(self.base_yieldsba / "KarakasLi.dat", skiprows=1)

@@ -7,6 +7,7 @@ from typing import Tuple
 
 import numpy as np
 
+from .constants import NUM_ELEMENTS
 from .model_tables import ModelTables
 
 
@@ -131,7 +132,7 @@ class CompatInterpolator:
 
     def interp(self, mass: float, zeta: float, binmax: float) -> Tuple[np.ndarray, float]:
         s = self.tables
-        elem = 33
+        elem = NUM_ELEMENTS
         nmax = 23
 
         H = float(mass)

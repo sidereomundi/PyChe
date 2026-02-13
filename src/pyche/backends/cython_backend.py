@@ -7,6 +7,7 @@ from dataclasses import dataclass
 import numpy as np
 
 from ..config import RunConfig
+from ..constants import GALACTIC_AGE
 from ..interpolation_compat import CompatInterpolator
 from ..model_tables import ModelTables
 
@@ -286,7 +287,7 @@ class CythonModelInterpolator:
         if _cyinterp is None:
             oldstars_contrib = 0.0
             for jj in np.asarray(indices, dtype=np.int32):
-                if tdead[jj] + t > 13500.0:
+                if tdead[jj] + t > GALACTIC_AGE:
                     oldstars_contrib += multi1[jj] * sfr_mass
                 q, hecore = self.interp(float(mstars[jj]), float(zeta_t), float(binmax[jj]))
                 mstars1_eff[jj] = (binmax[jj] + mstars[jj]) if (binmax[jj] > 0.0) else mstars[jj]

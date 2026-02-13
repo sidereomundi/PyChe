@@ -15,6 +15,7 @@ import numpy as np
 
 from .backends.factory import build_backend
 from .config import RunConfig
+from .constants import NMAX_DEFAULT, NUM_ELEMENTS
 from .engine import run_mingce
 from .imf_mass_bins import build_mass_bins
 from .io_routines import FortranState, IORoutines
@@ -26,6 +27,78 @@ try:
     from mpi4py import MPI  # type: ignore
 except Exception:  # pragma: no cover - optional dependency
     MPI = None
+
+
+def _build_runconfig_dict(
+    *,
+    endoftime_eff: int,
+    sigmat: float, sigmah: float, psfr: float, pwind: float,
+    delay: int, time_wind: int,
+    input_time_arr: np.ndarray | None,
+    infall_values_arr: np.ndarray | None,
+    rhosfr_values_arr: np.ndarray | None,
+    use_mpi: bool, mpi_nonblocking_reduce: bool,
+    show_progress: bool, progress_style: str,
+    output_dir: str | None, output_mode: str,
+    write_output: bool,
+    df_binary_format: str, df_write_csv: bool,
+    backend: str,
+    adaptive_timestep: bool,
+    dt_min: int, dt_max: int, dt_rel_tol: float,
+    dt_smooth_alpha: float, dt_growth_factor: float, dt_shrink_factor: float,
+    dt_force_small_below_zeta: float, dt_force_small_value: int,
+    spalla_stride: int, spalla_inactive_threshold: float,
+    spalla_lut: bool,
+    spalla_lut_q_points: int, spalla_lut_d_points: int,
+    spalla_lut_logq_min: float, spalla_lut_logq_max: float,
+    spalla_lut_logd_min: float, spalla_lut_logd_max: float,
+    interp_cache: bool,
+    interp_cache_mass_points: int, interp_cache_zeta_points: int,
+    interp_cache_binmax_points: int, interp_cache_zeta_max: float,
+    interp_cache_guard: bool, interp_cache_guard_tol: float,
+    interp_cache_guard_stride: int, interp_cache_guard_samples: int,
+    interp_cache_guard_force_below_zeta: float,
+    interp_cache_guard_zeta_trigger: float,
+    profile_timing: bool,
+) -> dict[str, object]:
+    """Build the parameter dict used for both MPI subprocess JSON and RunConfig."""
+    return {
+        "endoftime": endoftime_eff,
+        "sigmat": sigmat, "sigmah": sigmah, "psfr": psfr, "pwind": pwind,
+        "delay": delay, "time_wind": time_wind,
+        "input_time": None if input_time_arr is None else [float(x) for x in input_time_arr],
+        "infall_values": None if infall_values_arr is None else [float(x) for x in infall_values_arr],
+        "rhosfr_values": None if rhosfr_values_arr is None else [float(x) for x in rhosfr_values_arr],
+        "use_mpi": use_mpi, "mpi_nonblocking_reduce": mpi_nonblocking_reduce,
+        "show_progress": show_progress, "progress_style": progress_style,
+        "output_dir": output_dir, "output_mode": output_mode,
+        "write_output": write_output,
+        "df_binary_format": df_binary_format, "df_write_csv": df_write_csv,
+        "backend": backend,
+        "adaptive_timestep": adaptive_timestep,
+        "dt_min": dt_min, "dt_max": dt_max, "dt_rel_tol": dt_rel_tol,
+        "dt_smooth_alpha": dt_smooth_alpha,
+        "dt_growth_factor": dt_growth_factor, "dt_shrink_factor": dt_shrink_factor,
+        "dt_force_small_below_zeta": dt_force_small_below_zeta,
+        "dt_force_small_value": dt_force_small_value,
+        "spalla_stride": spalla_stride, "spalla_inactive_threshold": spalla_inactive_threshold,
+        "spalla_lut": spalla_lut,
+        "spalla_lut_q_points": spalla_lut_q_points, "spalla_lut_d_points": spalla_lut_d_points,
+        "spalla_lut_logq_min": spalla_lut_logq_min, "spalla_lut_logq_max": spalla_lut_logq_max,
+        "spalla_lut_logd_min": spalla_lut_logd_min, "spalla_lut_logd_max": spalla_lut_logd_max,
+        "interp_cache": interp_cache,
+        "interp_cache_mass_points": interp_cache_mass_points,
+        "interp_cache_zeta_points": interp_cache_zeta_points,
+        "interp_cache_binmax_points": interp_cache_binmax_points,
+        "interp_cache_zeta_max": interp_cache_zeta_max,
+        "interp_cache_guard": interp_cache_guard,
+        "interp_cache_guard_tol": interp_cache_guard_tol,
+        "interp_cache_guard_stride": interp_cache_guard_stride,
+        "interp_cache_guard_samples": interp_cache_guard_samples,
+        "interp_cache_guard_force_below_zeta": interp_cache_guard_force_below_zeta,
+        "interp_cache_guard_zeta_trigger": interp_cache_guard_zeta_trigger,
+        "profile_timing": profile_timing,
+    }
 
 
 @dataclass
@@ -279,91 +352,22 @@ class GCEModel:
             if np.any(rhosfr_values_arr < 0.0):
                 raise ValueError("rhosfr_values must be >= 0")
 
-        comm0, rank0, size0 = self._mpi_ctx()
-        if mpi_subprocess and use_mpi and size0 == 1:
-            call_kwargs: dict[str, object] = {
-                "endoftime": endoftime_eff,
-                "sigmat": sigmat,
-                "sigmah": sigmah,
-                "psfr": psfr,
-                "pwind": pwind,
-                "delay": delay,
-                "time_wind": time_wind,
-                "input_time": None if input_time_arr is None else [float(x) for x in input_time_arr],
-                "infall_values": None if infall_values_arr is None else [float(x) for x in infall_values_arr],
-                "rhosfr_values": None if rhosfr_values_arr is None else [float(x) for x in rhosfr_values_arr],
-                "use_mpi": True,
-                "mpi_nonblocking_reduce": mpi_nonblocking_reduce,
-                "show_progress": show_progress,
-                "progress_style": progress_style,
-                "output_dir": output_dir,
-                "output_mode": output_mode,
-                "write_output": write_output,
-                "df_binary_format": df_binary_format,
-                "df_write_csv": df_write_csv,
-                "backend": backend,
-                "adaptive_timestep": adaptive_timestep,
-                "dt_min": dt_min,
-                "dt_max": dt_max,
-                "dt_rel_tol": dt_rel_tol,
-                "dt_smooth_alpha": dt_smooth_alpha,
-                "dt_growth_factor": dt_growth_factor,
-                "dt_shrink_factor": dt_shrink_factor,
-                "dt_force_small_below_zeta": dt_force_small_below_zeta,
-                "dt_force_small_value": dt_force_small_value,
-                "spalla_stride": spalla_stride,
-                "spalla_inactive_threshold": spalla_inactive_threshold,
-                "spalla_lut": spalla_lut,
-                "spalla_lut_q_points": spalla_lut_q_points,
-                "spalla_lut_d_points": spalla_lut_d_points,
-                "spalla_lut_logq_min": spalla_lut_logq_min,
-                "spalla_lut_logq_max": spalla_lut_logq_max,
-                "spalla_lut_logd_min": spalla_lut_logd_min,
-                "spalla_lut_logd_max": spalla_lut_logd_max,
-                "interp_cache": interp_cache,
-                "interp_cache_mass_points": interp_cache_mass_points,
-                "interp_cache_zeta_points": interp_cache_zeta_points,
-                "interp_cache_binmax_points": interp_cache_binmax_points,
-                "interp_cache_zeta_max": interp_cache_zeta_max,
-                "interp_cache_guard": interp_cache_guard,
-                "interp_cache_guard_tol": interp_cache_guard_tol,
-                "interp_cache_guard_stride": interp_cache_guard_stride,
-                "interp_cache_guard_samples": interp_cache_guard_samples,
-                "interp_cache_guard_force_below_zeta": interp_cache_guard_force_below_zeta,
-                "interp_cache_guard_zeta_trigger": interp_cache_guard_zeta_trigger,
-                "profile_timing": profile_timing,
-                "return_results": True,
-                "mpi_subprocess": False,
-                "mpi_subprocess_ranks": 0,
-            }
-            return self._run_mpi_subprocess(mpi_subprocess_ranks=mpi_subprocess_ranks, kwargs=call_kwargs)
-
-        cfg = RunConfig(
-            endoftime=endoftime_eff,
-            sigmat=sigmat,
-            sigmah=sigmah,
-            psfr=psfr,
-            pwind=pwind,
-            delay=delay,
-            time_wind=time_wind,
-            input_time=None if input_time_arr is None else tuple(float(x) for x in input_time_arr),
-            infall_time=None,
-            infall_values=None if infall_values_arr is None else tuple(float(x) for x in infall_values_arr),
-            rhosfr_values=None if rhosfr_values_arr is None else tuple(float(x) for x in rhosfr_values_arr),
+        d = _build_runconfig_dict(
+            endoftime_eff=endoftime_eff,
+            sigmat=sigmat, sigmah=sigmah, psfr=psfr, pwind=pwind,
+            delay=delay, time_wind=time_wind,
+            input_time_arr=input_time_arr,
+            infall_values_arr=infall_values_arr,
+            rhosfr_values_arr=rhosfr_values_arr,
             use_mpi=use_mpi,
             mpi_nonblocking_reduce=mpi_nonblocking_reduce,
-            show_progress=show_progress,
-            progress_style=progress_style,
-            output_dir=output_dir,
-            output_mode=output_mode,
+            show_progress=show_progress, progress_style=progress_style,
+            output_dir=output_dir, output_mode=output_mode,
             write_output=write_output,
-            df_binary_format=df_binary_format,
-            df_write_csv=df_write_csv,
+            df_binary_format=df_binary_format, df_write_csv=df_write_csv,
             backend=backend,
             adaptive_timestep=adaptive_timestep,
-            dt_min=dt_min,
-            dt_max=dt_max,
-            dt_rel_tol=dt_rel_tol,
+            dt_min=dt_min, dt_max=dt_max, dt_rel_tol=dt_rel_tol,
             dt_smooth_alpha=dt_smooth_alpha,
             dt_growth_factor=dt_growth_factor,
             dt_shrink_factor=dt_shrink_factor,
@@ -392,8 +396,22 @@ class GCEModel:
             profile_timing=profile_timing,
         )
 
-        nmax = 15000
-        elem = 33
+        comm0, rank0, size0 = self._mpi_ctx()
+        if mpi_subprocess and use_mpi and size0 == 1:
+            call_kwargs = dict(d, return_results=True, mpi_subprocess=False, mpi_subprocess_ranks=0)
+            return self._run_mpi_subprocess(mpi_subprocess_ranks=mpi_subprocess_ranks, kwargs=call_kwargs)
+
+        # Convert list-valued sequences to tuples for the frozen RunConfig.
+        cfg_d = dict(d)
+        cfg_d["infall_time"] = None
+        for key in ("input_time", "infall_values", "rhosfr_values"):
+            v = cfg_d[key]
+            if v is not None:
+                cfg_d[key] = tuple(v)
+        cfg = RunConfig(**cfg_d)
+
+        nmax = NMAX_DEFAULT
+        elem = NUM_ELEMENTS
 
         self._initialize_from_fortran_tables(lowmassive=1, mm=0)
         self.interpolator = build_backend(cfg.backend, self.tables, cfg=cfg)

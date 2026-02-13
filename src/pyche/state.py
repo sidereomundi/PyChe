@@ -6,6 +6,8 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from .constants import FE, GAS_FLOOR, INI_LI, LI, NMAX_DEFAULT, NUM_ELEMENTS
+
 
 @dataclass
 class SimulationState:
@@ -27,7 +29,7 @@ class SimulationState:
     winds: np.ndarray
 
     @classmethod
-    def create(cls, nmax: int = 15000, elem: int = 33) -> "SimulationState":
+    def create(cls, nmax: int = NMAX_DEFAULT, elem: int = NUM_ELEMENTS) -> "SimulationState":
         allv = np.zeros(nmax + 2, dtype=float)
         gas = np.zeros(nmax + 2, dtype=float)
         stars = np.zeros(nmax + 2, dtype=float)
@@ -39,11 +41,11 @@ class SimulationState:
         snianum = np.zeros(nmax + 2, dtype=float)
         spalla = np.zeros(nmax + 2, dtype=float)
         sfr_hist = np.zeros(nmax + 2, dtype=float)
-        qqn = np.full((elem + 1, nmax + 2), 1.0e-20, dtype=float)
+        qqn = np.full((elem + 1, nmax + 2), GAS_FLOOR, dtype=float)
         ini = np.zeros(elem + 1, dtype=float)
-        ini[31] = 1.0e-9
+        ini[LI] = INI_LI
         winds = np.ones(32, dtype=float)
-        winds[9] = 1.0
+        winds[FE] = 1.0
         return cls(
             allv=allv,
             gas=gas,

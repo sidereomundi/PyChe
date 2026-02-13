@@ -1,5 +1,6 @@
 """Python reimplementation of the Fortran ``GCE`` code."""
 
+from . import constants
 from .main import GCEModel, GCEResult
 from .interpolation import Interpolator, InterpolationData
 from .interpolation_api import InterpolationKernel, ModelInterpolator
@@ -14,6 +15,7 @@ from .state import SimulationState
 from .tau import tau
 
 __all__ = [
+    "constants",
     "GCEModel",
     "GCEResult",
     "Interpolator",
