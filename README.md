@@ -19,6 +19,7 @@ Useful subsets:
 ```bash
 pip install -e .[mpi]
 pip install -e .[plots]
+pip install -e .[jax]
 ```
 
 Optional Cython build (recommended for speed):
@@ -102,6 +103,7 @@ For notebook MPI runs (`use_mpi=True`, `mpi_subprocess=True`), you can tune prog
 ## Backend Notes
 
 - `backend="auto"` is recommended. It falls back safely to NumPy.
+- `backend="jax"` enables a JAX-backed interpolation path (requires `pip install -e .[jax]`).
 - MPI requires `mpi4py` and launching with `mpiexec`.
 - `backend="cython"` is optional and speed-oriented, but it requires compiled Cython extensions:
   - `pip install cython`

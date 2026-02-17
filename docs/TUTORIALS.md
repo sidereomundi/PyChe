@@ -281,7 +281,7 @@ print(res.mod.shape, res.fis.shape)
 
 1. Build Cython:
    - `python setup.py build_ext --inplace`
-2. Start from `backend="auto"` (or force `cython` if known-good).
+2. Start from `backend="auto"` (or force `cython`/`jax` if known-good and installed).
 3. Disable progress for benchmarks:
    - `show_progress=False`
 4. Use MPI shell mode for clean speed tests.

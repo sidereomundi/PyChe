@@ -16,7 +16,8 @@ dependencies = [
 dataframe = ["pandas>=1.5"]
 plots = ["matplotlib>=3.6", "pandas>=1.5"]
 mpi = ["mpi4py>=3.1"]
-all = ["pandas>=1.5", "matplotlib>=3.6", "mpi4py>=3.1"]
+jax = ["jax>=0.4"]
+all = ["pandas>=1.5", "matplotlib>=3.6", "mpi4py>=3.1", "jax>=0.4"]
 
 [tool.setuptools]
 package-dir = {"" = "src"}

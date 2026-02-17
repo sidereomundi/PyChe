@@ -116,8 +116,8 @@ class RunConfig:
             raise ValueError("output_mode must be one of: legacy, dataframe, both")
         if self.df_binary_format not in {"pickle", "parquet"}:
             raise ValueError("df_binary_format must be one of: pickle, parquet")
-        if self.backend not in {"numpy", "cython", "numba", "auto"}:
-            raise ValueError("backend must be one of: numpy, cython, numba, auto")
+        if self.backend not in {"numpy", "cython", "numba", "jax", "auto"}:
+            raise ValueError("backend must be one of: numpy, cython, numba, jax, auto")
         if self.dt_min < 1:
             raise ValueError("dt_min must be >= 1")
         if self.dt_max < self.dt_min:
