@@ -21,7 +21,11 @@ def main() -> int:
         print("missing payload", file=sys.stderr)
         return 2
     payload = sys.argv[1]
-    kwargs = json.loads(base64.b64decode(payload.encode("ascii")).decode("utf-8"))
+    if payload.startswith("@"):
+        with open(payload[1:], "r", encoding="utf-8") as f:
+            kwargs = json.load(f)
+    else:
+        kwargs = json.loads(base64.b64decode(payload.encode("ascii")).decode("utf-8"))
     model = GCEModel()
     res = model.GCE(**kwargs)
 

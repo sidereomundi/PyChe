@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-import base64
 import json
 import os
 import pickle
@@ -134,14 +133,22 @@ class GCEModel:
     def _run_mpi_subprocess(self, mpi_subprocess_ranks: int, kwargs: dict[str, object]) -> GCEResult:
         if mpi_subprocess_ranks < 2:
             raise ValueError("mpi_subprocess_ranks must be >= 2")
-        payload = base64.b64encode(json.dumps(kwargs).encode("utf-8")).decode("ascii")
         show_progress = bool(kwargs.get("show_progress", False))
         progress_style = str(kwargs.get("progress_style", "single")).strip().lower()
         endoftime = int(kwargs.get("endoftime", 0))
         if show_progress:
             kwargs = dict(kwargs)
             kwargs["show_progress"] = False
-            payload = base64.b64encode(json.dumps(kwargs).encode("utf-8")).decode("ascii")
+        fd_payload, payload_path = tempfile.mkstemp(prefix="pyche_mpi_payload_", suffix=".json")
+        try:
+            with os.fdopen(fd_payload, "w", encoding="utf-8") as f_payload:
+                json.dump(kwargs, f_payload)
+        except Exception:
+            try:
+                os.remove(payload_path)
+            except OSError:
+                pass
+            raise
         fd, result_path = tempfile.mkstemp(prefix="pyche_mpi_result_", suffix=".pkl")
         os.close(fd)
         fd_p, progress_path = tempfile.mkstemp(prefix="pyche_mpi_progress_", suffix=".txt")
@@ -154,7 +161,7 @@ class GCEModel:
             "-u",
             "-m",
             "pyche._mpiexec_bridge",
-            payload,
+            f"@{payload_path}",
         ]
         env = dict(os.environ)
         env["PYCHE_MPI_RESULT_PATH"] = result_path
@@ -249,6 +256,10 @@ class GCEModel:
                 pass
             try:
                 os.remove(progress_path)
+            except OSError:
+                pass
+            try:
+                os.remove(payload_path)
             except OSError:
                 pass
 
