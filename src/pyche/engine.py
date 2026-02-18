@@ -7,6 +7,7 @@ from typing import Any
 import numpy as np
 
 from .config import RunConfig
+from .engine_jax_full import run_mingce_jax_full
 from .engine_jax import run_mingce_jax
 from .engine_mpi import run_mingce_mpi
 from .engine_serial import run_mingce_serial
@@ -29,6 +30,19 @@ def run_mingce(
     """Dispatch GCE execution to serial or MPI frontend."""
     if cfg.backend == "jax":
         return run_mingce_jax(
+            model,
+            cfg,
+            runtime,
+            mstars=mstars,
+            binmax=binmax,
+            multi1=multi1,
+            tdead=tdead,
+            norm=norm,
+            ss2=ss2,
+            elem=elem,
+        )
+    if cfg.backend == "jax_full":
+        return run_mingce_jax_full(
             model,
             cfg,
             runtime,

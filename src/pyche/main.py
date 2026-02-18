@@ -446,7 +446,10 @@ class GCEModel:
 
         self._initialize_from_fortran_tables(lowmassive=1, mm=0)
         backend_key = self._backend_key(cfg)
-        if self.interpolator is None or self._interpolator_key != backend_key:
+        if cfg.backend == "jax_full":
+            self.interpolator = None
+            self._interpolator_key = backend_key
+        elif self.interpolator is None or self._interpolator_key != backend_key:
             self.interpolator = build_backend(cfg.backend, self.tables, cfg=cfg)
             self._interpolator_key = backend_key
 
