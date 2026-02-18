@@ -18,7 +18,7 @@ def build_backend(name: str, tables: ModelTables, cfg: RunConfig | None = None):
     if name == "numba":
         return build_numba_backend(tables)
     if name == "jax":
-        return build_jax_backend(tables)
+        return build_jax_backend(tables, cfg=cfg)
     if name == "auto":
         try:
             return build_cython_backend(tables, cfg=cfg)
@@ -29,7 +29,7 @@ def build_backend(name: str, tables: ModelTables, cfg: RunConfig | None = None):
         except Exception:
             pass
         try:
-            return build_jax_backend(tables)
+            return build_jax_backend(tables, cfg=cfg)
         except Exception:
             return build_numpy_backend(tables)
     raise ValueError(f"Unknown backend: {name}")

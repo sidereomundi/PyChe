@@ -117,12 +117,32 @@ class GCEModel:
     state: FortranState = field(default_factory=FortranState)
     tables: ModelTables | None = None
     interpolator: object = field(init=False)
+    _interpolator_key: tuple[object, ...] | None = field(init=False, default=None)
 
     def __post_init__(self) -> None:
         self.interpolator = None
+        self._interpolator_key = None
 
     def _initialize_from_fortran_tables(self, lowmassive: int = 1, mm: int = 0) -> None:
-        self.tables = self.io.load_model_tables(lowmassive=lowmassive, mm=mm)
+        if self.tables is None:
+            self.tables = self.io.load_model_tables(lowmassive=lowmassive, mm=mm)
+
+    @staticmethod
+    def _backend_key(cfg: RunConfig) -> tuple[object, ...]:
+        return (
+            cfg.backend,
+            cfg.interp_cache,
+            cfg.interp_cache_mass_points,
+            cfg.interp_cache_zeta_points,
+            cfg.interp_cache_binmax_points,
+            cfg.interp_cache_zeta_max,
+            cfg.interp_cache_guard,
+            cfg.interp_cache_guard_tol,
+            cfg.interp_cache_guard_stride,
+            cfg.interp_cache_guard_samples,
+            cfg.interp_cache_guard_force_below_zeta,
+            cfg.interp_cache_guard_zeta_trigger,
+        )
 
     def _mpi_ctx(self) -> tuple[object | None, int, int]:
         if MPI is None:
@@ -425,7 +445,10 @@ class GCEModel:
         elem = NUM_ELEMENTS
 
         self._initialize_from_fortran_tables(lowmassive=1, mm=0)
-        self.interpolator = build_backend(cfg.backend, self.tables, cfg=cfg)
+        backend_key = self._backend_key(cfg)
+        if self.interpolator is None or self._interpolator_key != backend_key:
+            self.interpolator = build_backend(cfg.backend, self.tables, cfg=cfg)
+            self._interpolator_key = backend_key
 
         imf = 1
         tautype = 1
