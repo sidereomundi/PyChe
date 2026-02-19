@@ -249,7 +249,7 @@ def run_mingce_loop(
     interp = model.interpolator.interp
     interp_many_step = getattr(model.interpolator, "interp_many_step", None)
     next_dt = 1
-    use_cyengine = bool(cfg.backend in {"cython", "auto", "jax"} and _cyengine is not None)
+    use_cyengine = bool(cfg.backend in {"cython", "auto", "jax", "jax_full"} and _cyengine is not None)
     use_spalla_lut = bool(use_cyengine and cfg.spalla_lut)
     if use_spalla_lut:
         lut_logq = np.linspace(cfg.spalla_lut_logq_min, cfg.spalla_lut_logq_max, cfg.spalla_lut_q_points, dtype=float)
